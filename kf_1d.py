@@ -585,7 +585,7 @@ if __name__ == "__main__":
     if sim_truth:
         data["q_true"] = abc_simulate(data["precipitation"])
     else:
-        data["q_true"] = abc_simulate(data["discharge_spec"])
+        data["q_true"] = data["discharge_spec"]
 
     noise = np.random.normal(
         0, np.sqrt(q_measurement_noise), len(data["discharge_spec"])
