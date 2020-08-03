@@ -15,10 +15,14 @@ from bookplots import plot_measurements, plot_filter, plot_predictions
 # --------------- ABC MODEL FUNCTIONS -----------------
 def abcmodel(S: float, P: float) -> Tuple[float, float]:
     # hardcoding the paramters for 39034 (fit previously)
-    parameters = {'a': 0.398887110522937, 'b': 0.595108762279152, 'c': 0.059819062467189064}
-    a = parameters['a']
-    b = parameters['b']
-    c = parameters['c']
+    parameters = {
+        "a": 0.398887110522937,
+        "b": 0.595108762279152,
+        "c": 0.059819062467189064,
+    }
+    a = parameters["a"]
+    b = parameters["b"]
+    c = parameters["c"]
 
     # losses
     L = b * P
@@ -34,7 +38,9 @@ def abcmodel(S: float, P: float) -> Tuple[float, float]:
     return Q_sim, S
 
 
-def abcmodel_matrix(S0: float, P: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
+def abcmodel_matrix(
+    S0: float, P: np.ndarray, a: float, b: float, c: float
+) -> np.ndarray:
     """Convert the abc model to a matrix form (y = Ax + b)
 
     Calculation of Qsim.
@@ -67,20 +73,19 @@ def abcmodel_matrix(S0: float, P: np.ndarray, a: float, b: float, c: float) -> n
 
     # Calculate the contribution of Precip / previous storage.
     #   Shape: (t, t)
-    A = (np.eye(t) * (1 - a - b))
+    A = np.eye(t) * (1 - a - b)
 
     # set the off diagonal elements:
     #   ac(1 - c) ** (row_ix + 1) - (col_x + 2)
     row_ix = np.tril_indices_from(A, k=-1)[0]
     col_ix = np.tril_indices_from(A, k=-1)[1]
-    A[(row_ix, col_ix)] = a * c * (1 - c)** ((row_ix + 1) - (col_ix + 2))
+    A[(row_ix, col_ix)] = a * c * (1 - c) ** ((row_ix + 1) - (col_ix + 2))
 
     # Calculate Simulated Discharge (Q)
     Qsim = (A @ P) + (S0 * b_vec)
 
     assert Qsim.shape == (t, 1)
     return Qsim
-
 
 
 def simulate_data(
@@ -118,8 +123,7 @@ def simulate_data(
 
         # add noise to values (clip to 0)
         Qsim_noise = np.clip(
-            Qsim + np.random.normal(0, np.sqrt(measurement_noise)),
-            a_min=0, a_max=None
+            Qsim + np.random.normal(0, np.sqrt(measurement_noise)), a_min=0, a_max=None
         )
 
         # append simulated values
@@ -127,20 +131,22 @@ def simulate_data(
         qsim_noise.append(Qsim_noise)
         ssim.append(S)
 
-    sim_data = pd.DataFrame({
-        "precip": precip,
-        "qsim": qsim,
-        "qsim_noise": qsim_noise,
-        "ssim": ssim,
-    })
+    sim_data = pd.DataFrame(
+        {"precip": precip, "qsim": qsim, "qsim_noise": qsim_noise, "ssim": ssim}
+    )
     return sim_data
 
 
 # --------------- OTHER FUNCTIONS -----------------
 
+
 def test_matrix_vs_ordinary(P: np.ndarray, S0: float = 5.74) -> pd.DataFrame:
     # matrix
-    parameters = {'a': 0.398887110522937, 'b': 0.595108762279152, 'c': 0.059819062467189064}
+    parameters = {
+        "a": 0.398887110522937,
+        "b": 0.595108762279152,
+        "c": 0.059819062467189064,
+    }
     qsim_matrix = abcmodel_matrix(S0=S0, P=P, **parameters)
 
     S = S0
@@ -152,11 +158,8 @@ def test_matrix_vs_ordinary(P: np.ndarray, S0: float = 5.74) -> pd.DataFrame:
     qsim_ordinary = np.array(qsim_ordinary)
 
     df = pd.DataFrame(
-        {
-            "matrix":qsim_matrix.flatten(),
-            "original": qsim_ordinary.flatten()
-        },
-        index=np.arange(len(P))
+        {"matrix": qsim_matrix.flatten(), "original": qsim_ordinary.flatten()},
+        index=np.arange(len(P)),
     )
 
     return df
@@ -166,27 +169,29 @@ def read_data(data_dir: Path = Path("data")) -> pd.DataFrame:
     return pd.read_csv(data_dir / "39034_2010.csv")
 
 
-def plot_simulated_data(data: pd.DataFrame, measurement_noise: float = 1, station_id: int = 39034) -> None:
+def plot_simulated_data(
+    data: pd.DataFrame, measurement_noise: float = 1, station_id: int = 39034
+) -> None:
     fig, ax = plt.subplots(figsize=(12, 4))
     plt.scatter(
         x=np.arange(len(data)),
-        y=data['qsim_noise'].values,
+        y=data["qsim_noise"].values,
         s=1,
-        label=f"Noisy Qsim: Variance {measurement_noise}"
+        label=f"Noisy Qsim: Variance {measurement_noise}",
     )
-    plt.plot(
-        data['qsim'].values,
-        lw=0.5,
-        label="QSim without Noise"
-    )
+    plt.plot(data["qsim"].values, lw=0.5, label="QSim without Noise")
     plt.legend()
     ax.set_title(f"Simulated Data for Station: {station_id}")
     sns.despine()
-    fig.savefig(f"/Users/tommylees/Downloads/simulated_data_{random.random()*10:.2f}.png")
+    fig.savefig(
+        f"/Users/tommylees/Downloads/simulated_data_{random.random()*10:.2f}.png"
+    )
     plt.show()
 
 
-def run_1D_filter(data: pd.DataFrame, R: float, Q: float, P0: float, S0: float = 5.74) -> pd.DataFrame:
+def run_1D_filter(
+    data: pd.DataFrame, R: float, Q: float, P0: float, S0: float = 5.74
+) -> pd.DataFrame:
     """Run a simple 1D Kalman Filter on noisy simulated data.
 
     Initialize:
@@ -222,7 +227,7 @@ def run_1D_filter(data: pd.DataFrame, R: float, Q: float, P0: float, S0: float =
     Returns:
         pd.DataFrame: [description]
     """
-    assert all(np.isin(['precip', 'qsim', 'qsim_noise', 'ssim'], data.columns))
+    assert all(np.isin(["precip", "qsim", "qsim_noise", "ssim"], data.columns))
 
     measured_values = []
     predicted_values = []
@@ -240,13 +245,13 @@ def run_1D_filter(data: pd.DataFrame, R: float, Q: float, P0: float, S0: float =
     # Kalman Filtered Qsim
     for ix, precip in enumerate(data["precip"]):
         # predict step
-        Qsim, storage = abcmodel(storage, precip)   # process model (simulate Q)
-        dx = Qsim - X                               # convert into a change (dx)
+        Qsim, storage = abcmodel(storage, precip)  # process model (simulate Q)
+        dx = Qsim - X  #  convert into a change (dx)
         X, P = kf.predict(x=X, P=P, u=dx, Q=Q)
         predicted_values.append(X)
 
         # update step
-        z = data['qsim_noise'][ix]                  # measurement
+        z = data["qsim_noise"][ix]  # measurement
         X, P, y, K, S, log_likelihood = kf.update(x=X, P=P, z=z, R=R, return_all=True)
 
         filtered_values.append(X)
@@ -256,15 +261,17 @@ def run_1D_filter(data: pd.DataFrame, R: float, Q: float, P0: float, S0: float =
         log_likelihoods.append(float(log_likelihood))
         residuals.append(float(y))
 
-    out = pd.DataFrame({
-        "measured": measured_values,
-        "predicted": predicted_values,
-        "filtered": filtered_values,
-        "unobserved": data["qsim"],
-        "kalman_gain": kalman_gains,
-        "log_likelihood": log_likelihoods,
-        "residual": residuals,
-    })
+    out = pd.DataFrame(
+        {
+            "measured": measured_values,
+            "predicted": predicted_values,
+            "filtered": filtered_values,
+            "unobserved": data["qsim"],
+            "kalman_gain": kalman_gains,
+            "log_likelihood": log_likelihoods,
+            "residual": residuals,
+        }
+    )
 
     return out
 
@@ -284,7 +291,9 @@ def plot_filter_results(out: pd.DataFrame, xlim: Optional[Tuple[float]] = None) 
     ax.set_ylabel("Specific Discharge")
     sns.despine()
     ax.set_xlim(xlim)
-    fig.savefig(f"/Users/tommylees/Downloads/filter_results_{random.random()*10:.2f}.png")
+    fig.savefig(
+        f"/Users/tommylees/Downloads/filter_results_{random.random()*10:.2f}.png"
+    )
 
     plt.show()
 
@@ -292,16 +301,18 @@ def plot_filter_results(out: pd.DataFrame, xlim: Optional[Tuple[float]] = None) 
 if __name__ == "__main__":
     station_id = 39034
     original_data = read_data()
-    precip_data = original_data['precipitation']
+    precip_data = original_data["precipitation"]
 
     # ------ SIMULATE DATA ------
     measurement_noise = 0.1
     data = simulate_data(precip_data, measurement_noise=measurement_noise)
-    plot_simulated_data(data, measurement_noise=measurement_noise, station_id=station_id)
+    plot_simulated_data(
+        data, measurement_noise=measurement_noise, station_id=station_id
+    )
 
     # ------ HYPER PARAMETERS ------
-    # kalman filter values
-    P0 = initial_process_covariance = 100.
+    #  kalman filter values
+    P0 = initial_process_covariance = 100.0
     Q = process_uncertainty = 0.1
     S0 = initial_state = 5.74
     R = measurement_uncertainty = measurement_noise
@@ -313,14 +324,17 @@ if __name__ == "__main__":
     plot_filter_results(out, xlim=None)
 
     fig, ax = plt.subplots(figsize=(12, 4))
-    original_data.reset_index()['discharge_spec']
-    out["unobserved"].plot(ax=ax, lw=2, ls='--', color='k', alpha=0.8, label='unobserved')
+    original_data.reset_index()["discharge_spec"]
+    out["unobserved"].plot(
+        ax=ax, lw=2, ls="--", color="k", alpha=0.8, label="unobserved"
+    )
     out[["filtered", "predicted"]].plot(ax=ax, lw=0.8)
     plt.legend()
-    fig.savefig(f"/Users/tommylees/Downloads/unobserved_filtered_results_{random.random()*10:.2f}.png")
+    fig.savefig(
+        f"/Users/tommylees/Downloads/unobserved_filtered_results_{random.random()*10:.2f}.png"
+    )
 
     ax.set_title("The filtered values compared with the unobserved 'truth'")
     sns.despine()
     # ax.set_xlim(0, 30)
     plt.show()
-
