@@ -537,7 +537,7 @@ def plot_predicted_observed_discharge(data: pd.DataFrame, s: Saver, ax=None, sho
         fig = plt.gcf()
 
     # x = s.z[:, 0]               # Measured Discharge
-    x = data["discharge_spec"]  # True (unobserved) Discharge
+    x = data["q_true"]  # True (unobserved) Discharge
     y = (s.H @ s.x)[:, 0]       # Filtered Discharge
     ax.scatter(x, y, marker='x', label="Filtered Discharge")
 
