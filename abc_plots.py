@@ -16,6 +16,18 @@ from filterpy.common import Saver
 from bookplots import plot_measurements, plot_filter, plot_predictions, plot_track
 
 
+def plot_possible_draws(true_data, obs_noise: float):
+    fig, ax = plt.subplots(figsize=(12, 4))
+    min_bound = (true_data - (2 * np.sqrt(obs_noise))).clip(0, None)
+    max_bound = true_data + (2 * np.sqrt(obs_noise))
+    ax.plot(true_data, label="True")
+    ax.fill_between(np.arange(len(true_data)), min_bound, max_bound, alpha=0.2, label="$\pm2\sigma$")
+    ax.set_title("$2\sigma$ for measurement noise ($\epsilon$)")
+    sns.despine()
+
+    return fig, ax
+
+
 def plot_simulated_data(true_q, noisy_q, station_id: int = 39034) -> Any:
     fig, ax = plt.subplots(figsize=(12, 4))
     ax.scatter(x=np.arange(len(true_q)), y=noisy_q, s=3, label="$q_{obs}$")

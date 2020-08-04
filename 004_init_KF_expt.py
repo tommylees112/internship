@@ -23,6 +23,7 @@ from abc_plots import (
     plot_discharge_predictions,
     plot_state_storage,
     plot_discharge_uncertainty,
+    plot_possible_draws,
 )
 from config import read_config
 
@@ -159,8 +160,8 @@ if __name__ == "__main__":
     # ------ HYPER PARAMS ------
     # data simulation params
     S0 = initial_state = 5.74
-    r_obs_noise = 3.0
-    q_obs_noise = 0.01
+    r_obs_noise = 3.0            # 3.0
+    q_obs_noise = 0.01          # 0.01
 
     #  kalman filter params
     R = 0.01                # q_obs_noise
@@ -185,6 +186,12 @@ if __name__ == "__main__":
     data = simulate_data(
         original_data=original_data, q_obs_noise=q_obs_noise, r_obs_noise=r_obs_noise
     )
+
+    # possible draws:
+    fig, ax = plot_possible_draws(data["q_true"], q_obs_noise)
+    ax.set_title("$2\sqrt{\epsilon}_q$ for $q$ measurement noise ($\epsilon_{q}$)")
+    fig, ax = plot_possible_draws(data["precipitation"], r_obs_noise)
+    ax.set_title("$2\sqrt{\epsilon}_r$ for $r$ measurement noise ($\epsilon_{r}$)")
 
     # q_true vs. q_obs
     fig, ax = plot_simulated_data(data["q_true"], data["q_obs"])
@@ -243,11 +250,18 @@ if __name__ == "__main__":
     print("R2 Metrics:")
     print(f"Prior R2: {prior_r2:.2f}")
     print(f"Posterior R2: {posterior_r2:.2f}")
+    r2 = pd.DataFrame({"run": ["posterior", "prior"], "r2": [posterior_r2, prior_r2]})
 
     # 1. Filtered/Prior vs. True Scatter
-    fig, axs = plt.subplots(1, 2, figsize=(6 * 2, 4))
+    fig, axs = plt.subplots(1, 3, figsize=(6 * 3, 4))
     plot_predicted_observed_discharge(data, s, ax=axs[0])
     plot_simulated_discharge(data, ax=axs[1])
+
+    sns.barplot(x='run', y='r2', data=r2, ax=axs[2])
+    axs[2].set_title("$R^2$ Scores")
+    axs[2].set_ylim(0, 1)
+    sns.despine()
+
     plt.show()
     fig.savefig(plot_dir / "004_discharge_scatter.png")
 
