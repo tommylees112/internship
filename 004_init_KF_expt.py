@@ -7,6 +7,7 @@ import random
 import datetime
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.metrics import r2_score
 
 import filterpy.kalman as kf
 from filterpy.kalman import KalmanFilter
@@ -21,6 +22,7 @@ from abc_plots import (
     plot_simulated_discharge,
     plot_discharge_predictions,
     plot_state_storage,
+    plot_discharge_uncertainty,
 )
 from config import read_config
 
@@ -161,12 +163,15 @@ if __name__ == "__main__":
     q_obs_noise = 0.01
 
     #  kalman filter params
-    R = 0.01  # q_obs_noise
-    s_uncertainty = 1
-    r_uncertainty = 100
+    R = 0.01                # q_obs_noise
+    s_uncertainty = 1       # P[0, 0]
+    r_uncertainty = 100     # P[1, 1]
     s_noise = 0.1
     r_noise = 10_000
 
+    # How often to make observations?
+    observe_every = 1
+    assert observe_every >= 1, "Expect observe_every to be at least one"
 
     # ------ SETUP RUN ------
     base_dir = Path("/Users/tommylees/github/internship/")
@@ -175,7 +180,6 @@ if __name__ == "__main__":
 
     station_id = 39034
     original_data = read_data(data_dir)
-
 
     # ------ SIMULATE DATA ------
     data = simulate_data(
@@ -216,17 +220,30 @@ if __name__ == "__main__":
     # ------ RUN FILTER ------
     # Iterate over the Kalman Filter
     # for z, u in zip(data["q_obs"], data["precipitation"]):
-    for z in np.vstack([data["q_obs"], data["r_obs"]]).T:
+    for time_ix, z in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
         kf.predict()
-        kf.update(z)
+        # only make update steps every n timesteps
+        if time_ix % observe_every == 0:
+            kf.update(z)
         s.save()
 
     s.to_array()
 
+    if observe_every > 1:
+        data.loc[data.index % observe_every != 0, "q_true"] = np.nan
+
     # Calculate the DISCHARGE (measurement operator * \bar{x})
     data["q_filtered"] = (s.H @ s.x)[:, 0]
+    data["q_variance"] = (s.H @ s.P)[:, 0, 0]
 
     # ------ INTERPRET OUTPUT ------
+    # calculate error metrics
+    prior_r2 = r2_score(data["q_true"], data["q_prior"])
+    posterior_r2 = r2_score(data["q_true"], data["q_filtered"])
+    print("R2 Metrics:")
+    print(f"Prior R2: {prior_r2:.2f}")
+    print(f"Posterior R2: {posterior_r2:.2f}")
+
     # 1. Filtered/Prior vs. True Scatter
     fig, axs = plt.subplots(1, 2, figsize=(6 * 2, 4))
     plot_predicted_observed_discharge(data, s, ax=axs[0])
@@ -239,10 +256,12 @@ if __name__ == "__main__":
     plt.show()
     fig.savefig(plot_dir / "005_prior_true_sim_discharge.png")
 
-    # Plot rainfall estimates
-    # plot_obs_state_rainfall(s)
-
-    # Plot the Storage Parameter
+    # 3. Plot the Storage Parameter (unobserved)
     plot_state_storage(s, data)
     plt.show()
     fig.savefig(plot_dir / "006_prior_true_sim_storage.png")
+
+    fig, ax = plot_discharge_uncertainty(data)
+    plt.show()
+    fig.savefig(plot_dir / "007_discharge_uncertainty.png")
+

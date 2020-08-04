@@ -231,3 +231,24 @@ def plot_qprior_predictions(data: pd.DataFrame):
     plt.legend()
 
     return fig, ax
+
+
+def plot_discharge_uncertainty(data: pd.DataFrame):
+    fig, ax = plt.subplots(figsize=(12, 4))
+    min_bound = data["q_filtered"] + (2 * np.sqrt(data["q_variance"]))
+    max_bound = data["q_filtered"] - (2 * np.sqrt(data["q_variance"]))
+    ax.plot(data["q_filtered"], label='$q_{filtered}$')
+    ax.fill_between(data.index, min_bound, max_bound, alpha=0.2, label="$\pm2\sigma_q$")
+    ax.scatter(data.index, data["q_true"], label="$q_{true}$", facecolor="None", edgecolor="k", alpha=0.6, s=5)
+    sns.despine()
+    plt.legend()
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Specific Discharge (q - $mm day^{-1} km^{-2}$)")
+    ax.set_title("The Filtered Discharge ($Hx$) and 2 Standard Deviations ($2\sqrt{HP}$)")
+    if ax.get_ylim()[0] < 0:
+        if ax.get_ylim()[1] > 2.85:
+            ax.set_ylim((0, 2.85))
+        else:
+            ax.set_ylim((0, ax.get_ylim()[1]))
+
+    return fig, ax
