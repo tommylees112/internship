@@ -1,0 +1,5 @@
+# --- Experiment configurations --------------------------------------------------------------------
+
+# experiment name, used as folder name
+experiment_name: abcmodel_original
+

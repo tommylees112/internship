@@ -61,7 +61,7 @@ def abcmodel_matrix(
 
     Args:
         S0 (float): intial storage value
-        P (np.ndarray):
+        P (np.ndarray): precipitation values
 
     Returns:
         np.ndarray: QSim values returned as a column vector. Shape: (t, 1)
@@ -109,7 +109,7 @@ def simulate_data_abc_model(
     Returns:
         pd.DataFrame: DataFrame with columns -
             ['precip', 'precip_noise', 'qsim', 'qsim_noise',
-             'measured_qsim', 'ssim', 'ssim_noise']
+             'obs_qsim', 'ssim', 'ssim_noise']
 
     """
     np.random.seed(5)
@@ -138,7 +138,7 @@ def simulate_data_abc_model(
         ssim.append(S)
 
     # add measurement noise to the Qsim too (clip to 0)
-    measured_qsim = np.clip(
+    obs_qsim = np.clip(
         qsim + np.random.normal(0, np.sqrt(q_measurement_noise), len(qsim)),
         a_min=0,
         a_max=None,
@@ -158,7 +158,7 @@ def simulate_data_abc_model(
             "precip_noise": precip_noise,
             "qsim": qsim,
             "qsim_noise": qsim_noise,
-            "measured_qsim": measured_qsim,
+            "obs_qsim": obs_qsim,
             "ssim": ssim,
             "ssim_noise": ssim_noise,
         }
@@ -180,14 +180,21 @@ def test_matrix_vs_ordinary(P: np.ndarray, S0: float = 5.74) -> pd.DataFrame:
 
     S = S0
     qsim_ordinary = []
+    storages = []
     for precip in P:
         Q_sim, S = abcmodel(S, precip)
         qsim_ordinary.append(Q_sim)
+        storages.append(S)
 
     qsim_ordinary = np.array(qsim_ordinary)
+    storages = np.array(storages)
 
     df = pd.DataFrame(
-        {"matrix": qsim_matrix.flatten(), "original": qsim_ordinary.flatten()},
+        {
+            "matrix": qsim_matrix.flatten(),
+            "original": qsim_ordinary.flatten(),
+            "storage": storages.flatten(),
+        },
         index=np.arange(len(P)),
     )
 
@@ -202,13 +209,10 @@ def plot_simulated_data(
     true_q, noisy_q, station_id: int = 39034, savefig: bool = True
 ) -> None:
     fig, ax = plt.subplots(figsize=(12, 4))
-    ax.scatter(
-        x=np.arange(len(data)),
-        y=noisy_q,
-        s=1,
-        label=f"Measured",
-    )
-    ax.plot(true_q, lw=0.5, label="True (unobserved)")
+    ax.scatter(x=np.arange(len(data)), y=noisy_q, s=3, label="$q_{obs}$")
+    ax.plot(true_q, lw=1, label="$q_{true}$")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Specific Discharge $mm day^{-1} km^{-2}$")
     plt.legend()
     ax.set_title(f"Simulated Data for Station: {station_id}")
     sns.despine()
@@ -262,7 +266,7 @@ def run_1D_filter(
         np.isin(["precip", "precip_noise", "qsim", "qsim_noise", "ssim"], data.columns)
     )
 
-    measured_values = []
+    obs_values = []
     predicted_values = []
     filtered_values = []
 
@@ -272,7 +276,7 @@ def run_1D_filter(
 
     # initialize step
     P = P0
-    X = data["measured_qsim"][0]
+    X = data["obs_qsim"][0]
     storage = S0
 
     # Kalman Filtered Qsim
@@ -284,11 +288,11 @@ def run_1D_filter(
         predicted_values.append(X)
 
         # update step
-        z = data["measured_qsim"][ix]  # measurement
+        z = data["obs_qsim"][ix]  # measurement
         X, P, y, K, S, log_likelihood = kf.update(x=X, P=P, z=z, R=R, return_all=True)
 
         filtered_values.append(X)
-        measured_values.append(z)
+        obs_values.append(z)
 
         kalman_gains.append(float(K))
         log_likelihoods.append(float(log_likelihood))
@@ -296,7 +300,7 @@ def run_1D_filter(
 
     out = pd.DataFrame(
         {
-            "q_measured": measured_values,
+            "q_obs": obs_values,
             "predicted": predicted_values,
             "filtered": filtered_values,
             "unobserved": data["qsim"],
@@ -310,12 +314,12 @@ def run_1D_filter(
 
 
 def plot_filter_results(out: pd.DataFrame, xlim: Optional[Tuple[float]] = None) -> None:
-    assert all(np.isin(["q_measured", "filtered", "predicted"], out.columns))
+    assert all(np.isin(["q_obs", "filtered", "predicted"], out.columns))
 
     fig, ax = plt.subplots(figsize=(12, 4))
 
     # Labbe et al. plotting functionality
-    plot_measurements(out["q_measured"], lw=0.5)
+    plot_measurements(out["q_obs"], lw=0.5)
     plot_filter(out["filtered"])
     plot_predictions(out["predicted"])
 
@@ -331,16 +335,16 @@ def plot_filter_results(out: pd.DataFrame, xlim: Optional[Tuple[float]] = None) 
     plt.show()
 
 
-def plot_unobserved(out: pd.DataFrame, include_measured: bool = False):
+def plot_unobserved(out: pd.DataFrame, include_obs: bool = False):
     fig, ax = plt.subplots(figsize=(12, 4))
     out["unobserved"].plot(
         ax=ax, lw=2, ls="--", color="k", alpha=0.8, label="unobserved"
     )
     out[["filtered", "predicted"]].plot(ax=ax, lw=0.8)
-    if include_measured:
+    if include_obs:
         plt.scatter(
-            x=np.arange(len(out["q_measured"])),
-            y=out["q_measured"],
+            x=np.arange(len(out["q_obs"])),
+            y=out["q_obs"],
             facecolor="none",
             edgecolor="k",
             lw=0.5,
@@ -434,10 +438,10 @@ def init_filter(
     return abc_filter
 
 
-def plot_measured_state_rainfall(s: Saver):
+def plot_obs_state_rainfall(s: Saver):
     fig, ax = plt.subplots(figsize=(12, 4))
 
-    # plot measured and state
+    # plot obs and state
     ax.scatter(
         np.arange(s.x.shape[0]),
         s.z[:, 1],
@@ -460,18 +464,32 @@ def plot_measured_state_rainfall(s: Saver):
     plt.show()
 
     fig.savefig(
-        f"/Users/tommylees/Downloads/measured_vs_state_rainfall_{random.random()*10:.2f}.png"
+        f"/Users/tommylees/Downloads/obs_vs_state_rainfall_{random.random()*10:.2f}.png"
     )
 
 
-def plot_state_storage(s: Saver):
+def plot_state_storage(s: Saver, data: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(12, 4))
 
-    # plot measured and state
+    # plot obs and state
     ax.scatter(
         np.arange(s.x.shape[0]),
         s.x[:, 0],
-        label="State Estimate",
+        label="$S_{filtered}$",
+        color=sns.color_palette()[0],
+        alpha=0.6,
+    )
+    ax.scatter(
+        np.arange(s.x.shape[0]),
+        data["S_prior"],
+        label="$S_{prior}$",
+        color=sns.color_palette()[1],
+        alpha=0.6,
+    )
+    ax.scatter(
+        np.arange(s.x.shape[0]),
+        data["S_true"],
+        label="$S_{true}$",
         facecolor="None",
         edgecolor="k",
     )
@@ -483,12 +501,12 @@ def plot_state_storage(s: Saver):
     plt.show()
 
     fig.savefig(
-        f"/Users/tommylees/Downloads/measured_vs_state_rainfall_{random.random()*10:.2f}.png"
+        f"/Users/tommylees/Downloads/storage_state_{random.random()*10:.2f}.png"
     )
 
 
 def plot_simulated_discharge(data: pd.DataFrame, ax=None):
-    assert all(np.isin(["r_measured", "q_true"], data.columns))
+    assert all(np.isin(["r_obs", "q_true"], data.columns))
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -498,23 +516,18 @@ def plot_simulated_discharge(data: pd.DataFrame, ax=None):
         show_plt = True
     x = data["q_true"]
 
-    # simulate using the ABC model
-    parameters = {
-        "a": 0.398887110522937,
-        "b": 0.595108762279152,
-        "c": 0.059819062467189064,
-    }
-    y = abcmodel_matrix(S0=S0, P=data["r_measured"], **parameters)
+    # use prior simulations using the ABC model
+    y = data["q_prior"]
 
-    ax.scatter(x, y, marker='x', color=sns.color_palette()[1], label="Prior Discharge")
+    ax.scatter(x, y, marker="x", color=sns.color_palette()[1], label="Prior Discharge")
 
     # 1:1 line
     one_to_one_line = np.linspace(x.min(), x.max(), 10)
     ax.plot(one_to_one_line, one_to_one_line, "k--", label="1:1 Line")
 
     # beautifying the plot
-    ax.set_xlabel("Unobserved (true) Discharge")
-    ax.set_ylabel("ABC Simulated Discharge")
+    ax.set_xlabel("Unobserved (true) Discharge ($q_{true}$)")
+    ax.set_ylabel("Prior Predicted Discharge ($q_{prior}$)")
     ax.set_title("Prior Predicted Discharge vs. True Discharge")
     ax.legend()
     sns.despine()
@@ -523,8 +536,9 @@ def plot_simulated_discharge(data: pd.DataFrame, ax=None):
         plt.show()
 
 
-
-def plot_predicted_observed_discharge(data: pd.DataFrame, s: Saver, ax=None, show_plt: bool = False):
+def plot_predicted_observed_discharge(
+    data: pd.DataFrame, s: Saver, ax=None, show_plt: bool = False
+):
     """Plot the unobserved discharge vs. the filtered discharge
 
     Args:
@@ -538,15 +552,15 @@ def plot_predicted_observed_discharge(data: pd.DataFrame, s: Saver, ax=None, sho
 
     # x = s.z[:, 0]               # Measured Discharge
     x = data["q_true"]  # True (unobserved) Discharge
-    y = (s.H @ s.x)[:, 0]       # Filtered Discharge
-    ax.scatter(x, y, marker='x', label="Filtered Discharge")
+    y = (s.H @ s.x)[:, 0]  # Filtered Discharge
+    ax.scatter(x, y, marker="x", label="Filtered Discharge")
 
     # 1:1 line
     one_to_one_line = np.linspace(x.min(), x.max(), 10)
     ax.plot(one_to_one_line, one_to_one_line, "k--", label="1:1 Line")
 
     # beautifying the plot
-    ax.set_xlabel("Unobserved (true) Discharge")
+    ax.set_xlabel("Unobserved (true) Discharge ($q_{true}$)")
     ax.set_ylabel("Filtered Discharge ($Hx$)")
     ax.set_title("Filtered Discharge vs. True Discharge")
     plt.legend()
@@ -555,7 +569,7 @@ def plot_predicted_observed_discharge(data: pd.DataFrame, s: Saver, ax=None, sho
     if show_plt:
         plt.show()
         fig.savefig(
-            f"/Users/tommylees/Downloads/measured_vs_state_rainfall_{random.random()*10:.2f}.png"
+            f"/Users/tommylees/Downloads/obs_vs_state_rainfall_{random.random()*10:.2f}.png"
         )
 
 
@@ -570,7 +584,57 @@ def abc_simulate(precip, S0: float = 5.74):
     return qsim
 
 
+def plot_discharge_predictions(data: pd.DataFrame):
+    assert all(np.isin(["q_prior", "q_filtered", "q_true"], data.columns))
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(
+        data.index,
+        data["q_prior"],
+        label="$q_{prior}$",
+        ls=":",
+        color=sns.color_palette()[1],
+    )
+    ax.plot(
+        data.index,
+        data["q_filtered"],
+        label="$q_{filtered}$",
+        color=sns.color_palette()[0],
+    )
+    ax.plot(data.index, data["q_true"], label="$q_{true}$", ls="--", color="k")
+    plt.legend()
+    sns.despine()
+    ax.set_title("Comparison of Predicted Discharges ($q$)")
+    ax.set_ylabel("Specific Discharge (q - $mm day^{-1} km^{-2}$)")
+    ax.set_xlabel("Time")
+
+    plt.show()
+    fig.savefig(
+        f"/Users/tommylees/Downloads/discharge_comparison_{random.random()*10:.2f}.png"
+    )
+
+
+def plot_qprior_predictions(data: pd.DataFrame):
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(
+        data.index, data["q_prior"], color=sns.color_palette()[1], label="$q_{prior}$"
+    )
+    ax.set_title("Prior Predictions (without Filter)")
+    ax.set_ylabel("Specific Discharge (q - $mm day^{-1} km^{-2}$)")
+    ax.set_xlabel("Time")
+    sns.despine()
+    plt.legend()
+
+    plt.show()
+    fig.savefig(
+        f"/Users/tommylees/Downloads/q_prior_predictions_{random.random()*10:.2f}.png"
+    )
+
+
 if __name__ == "__main__":
+    # TRUE = black
+    # PRIOR = orange
+    # FILTERED = blue
+
     station_id = 39034
     original_data = read_data()
     precip_data = original_data["precipitation"]
@@ -583,34 +647,41 @@ if __name__ == "__main__":
 
     # simulate using the ABC model
     if sim_truth:
-        data["q_true"] = abc_simulate(data["precipitation"])
+        true_sim_df = test_matrix_vs_ordinary(data["precipitation"])
+        data["q_true"] = true_sim_df["original"]
+        data["S_true"] = true_sim_df["storage"]
     else:
         data["q_true"] = data["discharge_spec"]
 
     noise = np.random.normal(
         0, np.sqrt(q_measurement_noise), len(data["discharge_spec"])
     )
-    data["q_measured"] = np.clip(data["q_true"] + noise, a_min=0, a_max=None)
+    data["q_obs"] = np.clip(data["q_true"] + noise, a_min=0, a_max=None)
 
     noise = np.random.normal(
         0, np.sqrt(precip_measurement_noise), len(data["discharge_spec"])
     )
-    data["r_measured"] = np.clip(data["precipitation"] + noise, a_min=0, a_max=None)
+    data["r_obs"] = np.clip(data["precipitation"] + noise, a_min=0, a_max=None)
 
-    # q_true vs. q_measured
-    plot_simulated_data(
-        data["q_true"], data["q_measured"]
-    )
+    if sim_truth:
+        prior_sim_df = test_matrix_vs_ordinary(data["r_obs"])
+        data["q_prior"] = prior_sim_df["original"]
+        data["S_prior"] = prior_sim_df["storage"]
 
-    # r_true vs. r_measured
-    plot_simulated_data(data["precipitation"], data["r_measured"], savefig=False)
+    # q_true vs. q_obs
+    plot_simulated_data(data["q_true"], data["q_obs"])
+
+    # r_true vs. r_obs
+    plot_simulated_data(data["precipitation"], data["r_obs"], savefig=False)
     ax = plt.gca()
     fig = plt.gcf()
     ax.set_ylabel("Precipitation ($r$ - $mm day^{-1}$")
-    ax.set_title("$r_{measured}$ vs. $r_{true}$")
+    ax.set_title("$r_{obs}$ vs. $r_{true}$")
     plt.show()
-    fig.savefig(f"/Users/tommylees/Downloads/r_measured_graph_{random.random()*10:.2f}.png")
+    fig.savefig(f"/Users/tommylees/Downloads/r_obs_graph_{random.random()*10:.2f}.png")
 
+    # plot the PRIOR predictions
+    plot_qprior_predictions(data)
 
     # ------ HYPER PARAMETERS ------
     #  kalman filter values
@@ -623,7 +694,7 @@ if __name__ == "__main__":
 
     # ------ INIT FILTER ------
     kf = init_filter(
-        r0=data["r_measured"][0],
+        r0=data["r_obs"][0],
         S0=S0,
         s_uncertainty=s_uncertainty,
         r_uncertainty=r_uncertainty,
@@ -636,35 +707,35 @@ if __name__ == "__main__":
 
     # ------ RUN FILTER ------
     # Iterate over the Kalman Filter
-    # for z, u in zip(data["q_measured"], data["precipitation"]):
-    for z in np.vstack([data["q_measured"], data["r_measured"]]).T:
+    # for z, u in zip(data["q_obs"], data["precipitation"]):
+    for z in np.vstack([data["q_obs"], data["r_obs"]]).T:
         kf.predict()
         kf.update(z)
         s.save()
 
     s.to_array()
 
-    # assert np.all(
-    #     pd.Series(s.z[:, 0].flatten()) == data["q_measured"]
-    # ), "Expect the measured variables to be saved in the filtering process"
+    # Calculate the DISCHARGE (measurement operator * \bar{x})
+    data["q_filtered"] = (s.H @ s.x)[:, 0]
 
     # ------ INTERPRET OUTPUT ------
-    # plot filtered discharge vs. the observed discharge
-    fig, axs = plt.subplots(1, 2, figsize=(6*2, 4))
+    # 1. Filtered/Prior vs. True Scatter
+    fig, axs = plt.subplots(1, 2, figsize=(6 * 2, 4))
     plot_predicted_observed_discharge(data, s, ax=axs[0])
     plot_simulated_discharge(data, ax=axs[1])
     plt.show()
-    fig.savefig(f"/Users/tommylees/Downloads/sim_pred_discharge{random.random()*10:.2f}.png")
-    # plot (prior) predicted discharge vs. observed
+    fig.savefig(
+        f"/Users/tommylees/Downloads/sim_pred_discharge{random.random()*10:.2f}.png"
+    )
 
-
+    # 2. prior, filtered, true discharge Lineplot
+    plot_discharge_predictions(data)
 
     # Plot rainfall estimates
-    plot_measured_state_rainfall(s)
+    # plot_obs_state_rainfall(s)
 
     # Plot the Storage Parameter
-    # TODO: (compare with "TRUE" storage)
-    plot_state_storage(s)
+    plot_state_storage(s, data)
 
     # fig, ax = plt.subplots(figsize=(12, 4))
     # plt.scatter(x=np.arange(s.x[:, 0].shape[0]), y=s.x[:, 0])

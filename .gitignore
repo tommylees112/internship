@@ -1,2 +1,5 @@
+plots/
 examples/
 __pycache__
+.mypy_cache/
+.mypy*/
