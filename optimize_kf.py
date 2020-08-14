@@ -22,6 +22,7 @@ from scipy import optimize
 
 # My code
 from abc_model import PARAMETERS as parameters
+from abc_plots import plot_discharge_predictions
 
 
 def init_filter(
@@ -133,12 +134,47 @@ def kf_neg_log_likelihood(x: List[float], *args):
     return -np.sum(s.log_likelihood)
 
 
+def update_data_columns(data: pd.DataFrame, s: Saver):
+    # update data with POSTERIOR estimates
+    # Calculate the DISCHARGE (measurement operator * \bar{x})
+    data["q_filtered"] = ((s.H @ s.x))[:, 0]
+    data["q_variance"] = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
+    data["q_variance_plusR"] = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)) + s.R)[
+        :, 0, 0
+    ]
+
+    data["s_variance"] = s.P[:, 0, 0]
+    data["s_variance_plusR"] = (s.P + s.R)[:, 0, 0]
+    data["s_filtered"] = s.x[:, 0]
+
+    data["q_prior"] = ((s.H @ s.x_prior))[:, 0]
+
+    return data
+
+
 # --- FUNCTIONS --- # 
 def read_data(data_dir: Path = Path("data")) -> pd.DataFrame:
     df = pd.read_csv(data_dir / "39034_2010.csv")
     df["q_obs"] = df["discharge_spec"]
     df["r_obs"] = df["precipitation"]
     return df
+
+
+def print_latex_matrices(s: Saver):
+    Q = s.Q[0, :, :]
+    R = s.R[0, :, :]
+    print(
+        "Q=\\left[\\begin{array}{cc}"
+        f"{Q[0, 0]} & 0 \\\ "
+        f"0 & {Q[1, 1]}"
+        "\\end{array}\\right]"
+    )
+    print(
+        "R=\\left[\\begin{array}{cc}"
+        f"{R[0, 0]} & 0 \\\ "
+        f"0 & {R[1, 1]}"
+        "\\end{array}\\right]"
+    )
 
 
 if __name__ == "__main__":
@@ -150,10 +186,17 @@ if __name__ == "__main__":
     bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
     res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
 
-    x = [4.67129328e+05, 4.88503837e+06, 1.00000000e-09, 1.35341464e+06]
+    (
+            Q00,            Q11,             R00,            R11
+    ) = x = [4.67129328e+05, 4.88503837e+06, 1.00000000e-09, 1.35341464e+06]
     # Q00, Q11, R00, R11 = res.x
-    Q00, Q11, R00, R11 = x
 
+    kf, s = run_filter([Q00, Q11, R00, R11], data)
 
-    # Custom numpy datatype needed for numba input
-    # _dtype = np.dtype([])
+    data = update_data_columns(data, s)
+
+    print_latex_matrices(s)
+
+    fig, ax = plot_discharge_predictions(
+        data, filtered_prior=False, plusR=True)
+    ax.set_ylim(-0.1, 4.5)
