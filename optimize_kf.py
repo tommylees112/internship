@@ -148,8 +148,7 @@ if __name__ == "__main__":
     data = read_data()
     #          Q00,         Q11,         R00,         R11
     bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
-    # res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
-    res = optimize.
+    res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
 
     x = [4.67129328e+05, 4.88503837e+06, 1.00000000e-09, 1.35341464e+06]
     # Q00, Q11, R00, R11 = res.x
