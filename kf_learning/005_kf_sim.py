@@ -24,20 +24,25 @@ from abc_plots import (
     plot_state_storage,
     plot_discharge_uncertainty,
     plot_possible_draws,
+    plot_prior_posterior_scatter_r2,
+    plot_filtered_true_obs,
 )
 from config import read_config
 
 
+# Set seeds (for reproducibility)
+random.seed(1)
+np.random.seed(1)
+
+
 # --------------- IO FUNCTIONS -----------------
-
-
 def read_data(data_dir: Path = Path("data")) -> pd.DataFrame:
     return pd.read_csv(data_dir / "39034_2010.csv")
 
 
 def create_rundir(run_dir: Path, experiment_name: str) -> Path:
     # get the time now
-    now = datetime.now()
+    now = datetime.datetime.now()
     day = f"{now.day}".zfill(2)
     month = f"{now.month}".zfill(2)
     hour = f"{now.hour}".zfill(2)
@@ -48,6 +53,7 @@ def create_rundir(run_dir: Path, experiment_name: str) -> Path:
 
     # create the folder and parents
     (run_dir / folder).mkdir(exist_ok=True, parents=True)
+    (run_dir / folder / "plots").mkdir(exist_ok=True, parents=True)
 
     return run_dir / folder
 
@@ -55,8 +61,8 @@ def create_rundir(run_dir: Path, experiment_name: str) -> Path:
 # --------------- KF FUNCTIONS -----------------
 def init_filter(
     r0: float,
-    s_uncertainty: float = 1,
-    r_uncertainty: float = 100,
+    s_variance: float = 1,
+    r_variance: float = 100,
     s_noise: float = 0.01,
     r_noise: float = 10_000,
     S0: float = 5.74,
@@ -80,8 +86,8 @@ def init_filter(
         [c, (1 - a - b)]^T
 
     Args:
-        s_uncertainty (float, optional): [description]. Defaults to 1.
-        r_uncertainty (float, optional): [description]. Defaults to 100.
+        s_variance (float, optional): [description]. Defaults to 1.
+        r_variance (float, optional): [description]. Defaults to 100.
         s_noise (float, optional): [description]. Defaults to 0.01.
         r_noise (float, optional): [description]. Defaults to 10_000.
         S0 (float, optional): [description]. Defaults to 5.74.
@@ -101,7 +107,7 @@ def init_filter(
 
     # State Covariance (P) initial estimate
     # (2, 2) = square matrix
-    abc_filter.P[:] = np.diag([s_uncertainty, r_uncertainty])
+    abc_filter.P[:] = np.diag([s_variance, r_variance])
 
     #  state transition (F) - the process model
     # (2, 2) = square matrix
@@ -154,21 +160,78 @@ def simulate_data(
     return data
 
 
-# --------------- MAIN CODE -----------------
+def run_kf(
+    data: pd.DataFrame,
+    s_variance: float = 1,
+    r_variance: float = 3,
+    s_noise: float = 0.1,
+    r_noise: float = 10_000,
+    R: float = 0.01,
+    S0: float = 5.74,
+    observe_every: int = 1,
+) -> Tuple[KalmanFilter, Saver, pd.DataFrame]:
+    # ------ INIT FILTER ------
+    kf = init_filter(
+        r0=data["r_obs"][0],
+        S0=S0,
+        s_variance=s_variance,
+        r_variance=r_variance,
+        s_noise=s_noise,
+        r_noise=r_noise,
+        R=R,
+    )
 
+    s = Saver(kf)
+
+    # ------ RUN FILTER ------
+    if observe_every > 1:
+        data.loc[data.index % observe_every != 0, "q_obs"] = np.nan
+
+    # Iterate over the Kalman Filter
+    for time_ix, z in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
+        kf.predict()
+        # only make update steps every n timesteps
+        if time_ix % observe_every == 0:
+            kf.update(z)
+        s.save()
+
+    s.to_array()
+
+    # only observe every n values
+    # data["q_true_original"] = data["q_true"]
+
+    # update data with POSTERIOR estimates
+    # Calculate the DISCHARGE (measurement operator * \bar{x})
+    data["q_filtered"] = (s.H @ s.x)[:, 0]
+    data["q_variance"] = (s.H @ s.P)[:, 0, 0]
+
+    return kf, s, data
+
+
+def calculate_r2_metrics(data):
+    data = data.dropna()
+    prior_r2 = r2_score(data["q_true"], data["q_prior"])
+    posterior_r2 = r2_score(data["q_true"], data["q_filtered"])
+    r2 = pd.DataFrame({"run": ["posterior", "prior"], "r2": [posterior_r2, prior_r2]})
+    return r2
+
+
+# --------------- MAIN CODE -----------------
 if __name__ == "__main__":
     # ------ HYPER PARAMS ------
     # data simulation params
-    S0 = initial_state = 5.74
-    r_obs_noise = 3.0            # 3.0
-    q_obs_noise = 0.01          # 0.01
+    S0 = initial_state = 5.74    # 5.74
+    r_obs_noise = 3.0           # 3.0
+    q_obs_noise = thon0.01          # 0.01
 
     #  kalman filter params
-    R = 0.01                # q_obs_noise
-    s_uncertainty = 1       # P[0, 0]
-    r_uncertainty = 100     # P[1, 1]
-    s_noise = 0.1
-    r_noise = 10_000
+    # MEASUREMENT
+    R = 0.01                # 0.01
+    # PROCESS
+    s_variance = 1       # P[0, 0]  1
+    r_variance = 3       # P[1, 1]  3
+    s_noise = 0.1        # 0.1
+    r_noise = 1e5     # 10_000
 
     # How often to make observations?
     observe_every = 1
@@ -184,14 +247,19 @@ if __name__ == "__main__":
 
     # ------ SIMULATE DATA ------
     data = simulate_data(
-        original_data=original_data, q_obs_noise=q_obs_noise, r_obs_noise=r_obs_noise
+        original_data=original_data,
+        q_obs_noise=q_obs_noise,
+        r_obs_noise=r_obs_noise
     )
 
     # possible draws:
     fig, ax = plot_possible_draws(data["q_true"], q_obs_noise)
     ax.set_title("$2\sqrt{\epsilon}_q$ for $q$ measurement noise ($\epsilon_{q}$)")
+    fig.savefig(plot_dir / "000_a_possible_draws.png")
+
     fig, ax = plot_possible_draws(data["precipitation"], r_obs_noise)
     ax.set_title("$2\sqrt{\epsilon}_r$ for $r$ measurement noise ($\epsilon_{r}$)")
+    fig.savefig(plot_dir / "000_b_possible_draws.png")
 
     # q_true vs. q_obs
     fig, ax = plot_simulated_data(data["q_true"], data["q_obs"])
@@ -205,63 +273,27 @@ if __name__ == "__main__":
     plt.show()
     fig.savefig(plot_dir / f"002_robs_rtrue.png")
 
-    # plot the PRIOR predictions
-    fig, ax = plot_qprior_predictions(data)
-    plt.show()
-    fig.savefig(plot_dir / f"003_qprior.png")
-
-
-    # ------ INIT FILTER ------
-    kf = init_filter(
-        r0=data["r_obs"][0],
-        S0=S0,
-        s_uncertainty=s_uncertainty,
-        r_uncertainty=r_uncertainty,
+    # ------ RUN THE FILTER ------
+    kf, s, data = run_kf(
+        data=data,
+        s_variance=s_variance,
+        r_variance=r_variance,
         s_noise=s_noise,
         r_noise=r_noise,
         R=R,
+        S0=S0,
+        observe_every=observe_every,
     )
-
-    s = Saver(kf)
-
-    # ------ RUN FILTER ------
-    # Iterate over the Kalman Filter
-    # for z, u in zip(data["q_obs"], data["precipitation"]):
-    for time_ix, z in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
-        kf.predict()
-        # only make update steps every n timesteps
-        if time_ix % observe_every == 0:
-            kf.update(z)
-        s.save()
-
-    s.to_array()
-
-    if observe_every > 1:
-        data.loc[data.index % observe_every != 0, "q_true"] = np.nan
-
-    # Calculate the DISCHARGE (measurement operator * \bar{x})
-    data["q_filtered"] = (s.H @ s.x)[:, 0]
-    data["q_variance"] = (s.H @ s.P)[:, 0, 0]
 
     # ------ INTERPRET OUTPUT ------
     # calculate error metrics
-    prior_r2 = r2_score(data["q_true"], data["q_prior"])
-    posterior_r2 = r2_score(data["q_true"], data["q_filtered"])
+    r2 = calculate_r2_metrics(data)
     print("R2 Metrics:")
-    print(f"Prior R2: {prior_r2:.2f}")
-    print(f"Posterior R2: {posterior_r2:.2f}")
-    r2 = pd.DataFrame({"run": ["posterior", "prior"], "r2": [posterior_r2, prior_r2]})
+    print(f"Prior R2: {float(r2.loc[r2['run'] == 'prior', 'r2']):.2f}")
+    print(f"Posterior R2: {float(r2.loc[r2['run'] == 'posterior', 'r2']):.2f}")
 
     # 1. Filtered/Prior vs. True Scatter
-    fig, axs = plt.subplots(1, 3, figsize=(6 * 3, 4))
-    plot_predicted_observed_discharge(data, s, ax=axs[0])
-    plot_simulated_discharge(data, ax=axs[1])
-
-    sns.barplot(x='run', y='r2', data=r2, ax=axs[2])
-    axs[2].set_title("$R^2$ Scores")
-    axs[2].set_ylim(0, 1)
-    sns.despine()
-
+    fig, axs = plot_prior_posterior_scatter_r2(data, s, r2)
     plt.show()
     fig.savefig(plot_dir / "004_discharge_scatter.png")
 
@@ -278,4 +310,10 @@ if __name__ == "__main__":
     fig, ax = plot_discharge_uncertainty(data)
     plt.show()
     fig.savefig(plot_dir / "007_discharge_uncertainty.png")
+
+    #
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax = plot_filtered_true_obs(data)
+    ax.set_title("The Kalman Filter Posterior (vs. truth) over time")
+    fig.savefig(plot_dir / "008_true_obs.png")
 
