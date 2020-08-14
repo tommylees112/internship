@@ -3,3 +3,5 @@ examples/
 __pycache__
 .mypy_cache/
 .mypy*/
+.DS_Store
+*.gif
