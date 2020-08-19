@@ -29,6 +29,7 @@ from abc_plots import (
     plot_filtered_true_obs,
     setup_discharge_plot,
     plot_residual_limits,
+    plot_uncertainties,
 )
 from config import read_config
 
@@ -334,77 +335,90 @@ if __name__ == "__main__":
 
     plt.close("all")
 
+    d = data.copy()
+    d = d.rename(dict(
+        precipitation='r',
+        discharge_spec='y',
+        S_prior='S',
+        q_prior="y_hat",
+    ), axis=1)
+    d["y_t-1"] = d["y"].shift(1)
+    d = d[["time", "y", "r", "S", "y_hat", "y_t-1"]]
+    d["target"] = d["y"] - d["y_hat"]
+    d["input"] = tuple(zip(d["y_t-1"], d["y_hat"], d["r"]))
 
-means = s.x[:, 0, 0]
-variances = s.P[:, 0, 0]
-stds = 3
-fig, ax = plot_uncertainties(means, variances, stds)
-ax.set_title("$\sigma^2 = P$ for $S_t$")
 
-means = (s.H @ s.x)[:, 0, 0]
-variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
-stds = 3
-fig, ax = plot_uncertainties(means, variances, stds)
-ax.set_title("$\sigma^2 = HPH^T$ for $q_t$")
 
-means = (s.H @ s.y)[:, 0, 0]
-variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
-stds = 1
-fig, ax = plot_uncertainties(means, variances, stds)
-ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
+# means = s.x[:, 0, 0]
+# variances = s.P[:, 0, 0]
+# stds = 3
+# fig, ax = plot_uncertainties(means, variances, stds)
+# ax.set_title("$\sigma^2 = P$ for $S_t$")
 
-means = (s.H @ s.y)[:, 0, 0]
-variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
-stds = 1
-fig, ax = plot_uncertainties(means, variances, stds)
-ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
+# means = (s.H @ s.x)[:, 0, 0]
+# variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
+# stds = 3
+# fig, ax = plot_uncertainties(means, variances, stds)
+# ax.set_title("$\sigma^2 = HPH^T$ for $q_t$")
 
-means = (s.y)[:, 1, 0]
-variances = (s.P)[:, 1, 1]
-stds = 1
-fig, ax = plot_uncertainties(means, variances, stds)
-ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
+# means = (s.H @ s.y)[:, 0, 0]
+# variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
+# stds = 1
+# fig, ax = plot_uncertainties(means, variances, stds)
+# ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
 
-fig, ax = plt.subplots()
-pred_r = s.x[:, 1, 0]
-ax.plot(data.index, pred_r, label="Predicted Rainfall (x)")
-obs_r = data["precipitation"]
-ax.scatter(
-    data.index,
-    pred_r,
-    label="Obs/input Rainfall (z)",
-    marker="x",
-    color=sns.color_palette()[1],
-)
+# means = (s.H @ s.y)[:, 0, 0]
+# variances = ((s.H @ s.P) @ np.transpose(s.H, (0, 2, 1)))[:, 0, 0]
+# stds = 1
+# fig, ax = plot_uncertainties(means, variances, stds)
+# ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
 
-fig, ax = plt.subplots()
-# rainfall residuals
-ys = (s.z - (s.H @ s.x_prior))[:, 1, 0]
-sys = s.y[:, 1, 0]
-ax.scatter(data.index, ys, label="Calculated residuals")
-ax.scatter(data.index, s.y[:, 1, 0], label="Saver residuals", marker="x")
-plt.legend()
-sns.despine()
+# means = (s.y)[:, 1, 0]
+# variances = (s.P)[:, 1, 1]
+# stds = 1
+# fig, ax = plot_uncertainties(means, variances, stds)
+# ax.set_title("$\mu = Hy_t$ $\sigma^2 = HPH^T$ for $q_t$")
 
-#  Plot covariance ellipses!
-fig, ax = plt.subplots()
-plot_covariance(kf.x, kf.P, [1, 2, 3])
-ax.set_xlabel("Uncertainty in Storage (P[0,0])")
-ax.set_ylabel("Uncertainty in Rainfall (P[1,1])")
-sns.despine()
+# fig, ax = plt.subplots()
+# pred_r = s.x[:, 1, 0]
+# ax.plot(data.index, pred_r, label="Predicted Rainfall (x)")
+# obs_r = data["precipitation"]
+# ax.scatter(
+#     data.index,
+#     pred_r,
+#     label="Obs/input Rainfall (z)",
+#     marker="x",
+#     color=sns.color_palette()[1],
+# )
 
-fig, ax = plt.subplots()
-plot_covariance(kf.x, kf.R, [1, 2, 3])
-ax.set_xlabel("Measurement uncertainty in Discharge (R[0,0])")
-ax.set_ylabel("Measurement uncertainty in Rainfall (R[1,1])")
-sns.despine()
+# fig, ax = plt.subplots()
+# # rainfall residuals
+# ys = (s.z - (s.H @ s.x_prior))[:, 1, 0]
+# sys = s.y[:, 1, 0]
+# ax.scatter(data.index, ys, label="Calculated residuals")
+# ax.scatter(data.index, s.y[:, 1, 0], label="Saver residuals", marker="x")
+# plt.legend()
+# sns.despine()
 
-fig, ax = plt.subplots()
-plot_covariance(kf.x, kf.Q, [1, 2, 3])
-ax.set_xlabel("Measurement uncertainty in Storage (Q[0,0])")
-ax.set_ylabel("Measurement uncertainty in Rainfall (Q[1,1])")
-sns.despine()
+# #  Plot covariance ellipses!
+# fig, ax = plt.subplots()
+# plot_covariance(kf.x, kf.P, [1, 2, 3])
+# ax.set_xlabel("Uncertainty in Storage (P[0,0])")
+# ax.set_ylabel("Uncertainty in Rainfall (P[1,1])")
+# sns.despine()
 
-fig, ax = plt.subplots()
-ax.plot(data.index, s.log_likelihood)
-sns.despine()
+# fig, ax = plt.subplots()
+# plot_covariance(kf.x, kf.R, [1, 2, 3])
+# ax.set_xlabel("Measurement uncertainty in Discharge (R[0,0])")
+# ax.set_ylabel("Measurement uncertainty in Rainfall (R[1,1])")
+# sns.despine()
+
+# fig, ax = plt.subplots()
+# plot_covariance(kf.x, kf.Q, [1, 2, 3])
+# ax.set_xlabel("Measurement uncertainty in Storage (Q[0,0])")
+# ax.set_ylabel("Measurement uncertainty in Rainfall (Q[1,1])")
+# sns.despine()
+
+# fig, ax = plt.subplots()
+# ax.plot(data.index, s.log_likelihood)
+# sns.despine()
