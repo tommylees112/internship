@@ -194,6 +194,7 @@ def print_latex_matrices(s: Saver):
 
 
 if __name__ == "__main__":
+    # --- HYPER PARAMETERS --- #
     OPTIMIZER = "de"  # "de"    "min"
     #          Q00,         Q11,         R00,         R11
     bounds = [(1e-9, 1e7), (1e-9, 1e7), (0.01, 1e7), (0.01, 1e7)]
@@ -203,12 +204,12 @@ if __name__ == "__main__":
 
     data = read_data()
 
-    # --- RUN OPTIMIZATION --- #
     start_time = time.time()
     iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
     print(f"Bounds:\n\t[Q00, Q11, R00, R11] : {bounds}")
 
+    # --- RUN OPTIMIZATION --- #
     if OPTIMIZER == "de":
         # no initial guess required
         res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=10)
@@ -224,6 +225,7 @@ if __name__ == "__main__":
         print("No Optimizer Run ...")
         Q00, Q11, R00, R11 = [5.9781, 0.6406, 0.1, 0.1]
 
+    # --- PRINT TIME TAKEN --- #
     total_time = time.time() - start_time
     iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
     print(f"Optimizers finished ... {iso_time}")
