@@ -32,9 +32,13 @@ def init_filter(
     r_variance_P11: float = 100,
     s_noise_Q00: float = 0.01,
     r_noise_Q11: float = 10_000,
+    Q01: float = 0,
+    Q10: float = 0,
     S0: float = 5.74,
     q_meas_error_R00: float = 1,
     r_meas_error_R11: float = 1,
+    R01: float = 0,
+    R10: float = 0,
     parameters: Dict = parameters,
 ) -> KalmanFilter:
     """Init the ABC model kalman filter
@@ -84,6 +88,8 @@ def init_filter(
     # Process noise (Q)
     # (2, 2) = square matrix
     abc_filter.Q = np.diag([s_noise_Q00, r_noise_Q11])
+    abc_filter.Q[0, 1] = Q01
+    abc_filter.Q[1, 0] = Q10
 
     # ------- Update Variables -------
     # Measurement function (H) (how do we go from state -> observed?)
@@ -93,6 +99,8 @@ def init_filter(
     # measurement uncertainty
     # (2, 2) = square matrix OR is it just uncertainty on discharge (q)
     abc_filter.R = np.diag([q_meas_error_R00, r_meas_error_R11])
+    abc_filter.R[0, 1] = R01
+    abc_filter.R[1, 0] = R10
 
     # Control inputs (defaults)
     abc_filter.B = None  # np.ndarray([a])
@@ -108,7 +116,10 @@ def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter
         data = data[0]
 
     # store the parameters in the list_args
-    s_noise_Q00, r_noise_Q11, q_meas_error_R00, r_meas_error_R11 = list_args
+    (
+        s_noise_Q00, Q01, Q10, r_noise_Q11,
+        q_meas_error_R00, R01, R10, r_meas_error_R11
+    ) = list_args
 
     kf = init_filter(
         r0=0.0,
@@ -117,8 +128,12 @@ def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter
         r_variance_P11=100,
         s_noise_Q00=s_noise_Q00,
         r_noise_Q11=r_noise_Q11,
+        Q01=Q01,
+        Q10=Q10,
         q_meas_error_R00=q_meas_error_R00,
         r_meas_error_R11=r_meas_error_R11,
+        R01=R01,
+        R10=R10,
     )
 
     s = Saver(kf)
@@ -180,15 +195,15 @@ def print_latex_matrices(s: Saver):
     R = s.R[0, :, :]
     print(
         "Q=\\left[\\begin{array}{cc}"
-        f"{Q[0, 0]:.4f} & 0 \\\ "
-        f"0 & {Q[1, 1]:.4f}"
+        f"{Q[0, 0]:.4f} & {Q[0, 1]:.4f} \\\ "
+        f"{Q[1, 0]:.4f} & {Q[1, 1]:.4f}"
         "\\end{array}\\right]"
     )
     print("\\\ \\\\") # evaluates to -> "\\ \\"
     print(
         "R=\\left[\\begin{array}{cc}"
-        f"{R[0, 0]:.4f} & 0 \\\ "
-        f"0 & {R[1, 1]:.4f}"
+        f"{R[0, 0]:.4f} & {R[0, 1]:.4f} \\\ "
+        f"{R[1, 0]:.4f} & {R[1, 1]:.4f}"
         "\\end{array}\\right]"
     )
 
@@ -199,31 +214,34 @@ if __name__ == "__main__":
 
     # --- HYPER PARAMETERS --- #
     OPTIMIZER = "de"  # "de"    "min"
-    #          Q00,         Q11,         R00,         R11
-    bounds = [(1e-9, 1e7), (10, 1e7), (0.01, 1e7), (0.01, 1e7)]
+
+    #          Q00,         Q01,         Q10,         Q11
+    #          R00,         R01,         R10,         R11
+    bounds = [(1e-9, 1e5), (1e-9, 1e5), (1e-9, 1e2), (10, 1e5),
+              (1e-9, 1e5), (1e-9, 1e5), (1e-9, 1e5), (1e-9, 1e5)]
 
     data = read_data()
 
     start_time = time.time()
     iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
-    print(f"Bounds:\n\t[Q00, Q11, R00, R11] : {bounds}")
+    print(f"Bounds:\n\t[Q00, Q01, Q10, Q11, R00, R01, R10, R11] : {bounds}")
 
     # --- RUN OPTIMIZATION --- #
     if OPTIMIZER == "de":
         # no initial guess required
-        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=10)
-        Q00, Q11, R00, R11 = res.x
+        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=20)
+        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
 
     elif OPTIMIZER == "min":
         # intial guess required
         x0 = [1, 1, 1, 1]
         res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data, ), bounds=bounds, )
-        Q00, Q11, R00, R11 = res.x
+        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
 
     else:
         print("No Optimizer Run ...")
-        Q00, Q11, R00, R11 = [5.9781, 0.6406, 0.1, 0.1]
+        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = [5.9781, 0, 0, 0.6406, 0.1, 0, 0, 0.1]
 
     # --- PRINT TIME TAKEN --- #
     total_time = time.time() - start_time
@@ -248,7 +266,7 @@ if __name__ == "__main__":
 
     # for param in params:
         # [Q00, Q11, R00, R11] = param
-    kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
+    kf, s, ll = run_filter([Q00, Q01, Q10, Q11, R00, R01, R10, R11], data)
 
     data = update_data_columns(data, s)
 
