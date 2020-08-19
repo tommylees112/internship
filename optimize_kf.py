@@ -207,6 +207,7 @@ if __name__ == "__main__":
     start_time = time.time()
     iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
+    print(f"Bounds:\n\t[Q00, Q11, R00, R11] : {bounds}")
 
     if OPTIMIZER == "de":
         # no initial guess required
@@ -223,9 +224,11 @@ if __name__ == "__main__":
         print("No Optimizer Run ...")
         Q00, Q11, R00, R11 = [5.9781, 0.6406, 0.1, 0.1]
 
-    t = time.time() - start_time
+    total_time = time.time() - start_time
     iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
-    print(f"Optimizers finished ... {iso_time}\n---- {t:.1f} seconds ----")
+    print(f"Optimizers finished ... {iso_time}")
+    time_taken = f"{total_time // 60}:{total_time % 60:02} min:sec" if total_time > 60 else f"{total_time} seconds"
+    print(f"---- {time_taken} ----")
     print(f"Maximum Log Likelihood: {-res.fun:.2f}")
 
     # --- CHECK THE OPTIMIZED FILTER --- #
