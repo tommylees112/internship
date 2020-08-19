@@ -196,7 +196,7 @@ def print_latex_matrices(s: Saver):
 if __name__ == "__main__":
     OPTIMIZER = "de"  # "de"    "min"
     #          Q00,         Q11,         R00,         R11
-    bounds = [(1e-9, 1e7), (1e-9, 1e7), (1, 1e7), (1, 1e7)]
+    bounds = [(1e-9, 1e7), (1e-9, 1e7), (0.01, 1e7), (0.01, 1e7)]
 
     random.seed(1)
     np.random.seed(1)
@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
     else:
         print("No Optimizer Run ...")
-        Q00, Q11, R00, R11 = [5.9781, 0.6406, 1, 1]
+        Q00, Q11, R00, R11 = [5.9781, 0.6406, 0.1, 0.1]
 
     t = time.time() - start_time
     iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
@@ -230,7 +230,7 @@ if __name__ == "__main__":
 
     # --- CHECK THE OPTIMIZED FILTER --- #
     # [Q00, Q11, R00, R11] = [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
-    # [Q00, Q11, R00, R11] = [365.8369655321846, 3.996708697010645e-06, 1e-09, 1e-09]
+    # [Q00, Q11, R00, R11] = [365.837, 3.997e-06, 1e-09, 1e-09]
     # [Q00, Q11, R00, R11] = [5.9781, 0.6406, 0.1000, 0.1000]
 
     kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
