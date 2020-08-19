@@ -32,13 +32,11 @@ def init_filter(
     r_variance_P11: float = 100,
     s_noise_Q00: float = 0.01,
     r_noise_Q11: float = 10_000,
-    Q01: float = 0,
-    Q10: float = 0,
+    process_covariance_Q01Q10: float = 0,
     S0: float = 5.74,
     q_meas_error_R00: float = 1,
     r_meas_error_R11: float = 1,
-    R01: float = 0,
-    R10: float = 0,
+    measurement_covariance_R01R10: float = 0,
     parameters: Dict = parameters,
 ) -> KalmanFilter:
     """Init the ABC model kalman filter
@@ -88,8 +86,8 @@ def init_filter(
     # Process noise (Q)
     # (2, 2) = square matrix
     abc_filter.Q = np.diag([s_noise_Q00, r_noise_Q11])
-    abc_filter.Q[0, 1] = Q01
-    abc_filter.Q[1, 0] = Q10
+    # HAS TO BE SYMMETRIC
+    abc_filter.Q[0, 1] = abc_filter.Q[1, 0] = process_covariance_Q01Q10
 
     # ------- Update Variables -------
     # Measurement function (H) (how do we go from state -> observed?)
@@ -99,8 +97,7 @@ def init_filter(
     # measurement uncertainty
     # (2, 2) = square matrix OR is it just uncertainty on discharge (q)
     abc_filter.R = np.diag([q_meas_error_R00, r_meas_error_R11])
-    abc_filter.R[0, 1] = R01
-    abc_filter.R[1, 0] = R10
+    abc_filter.R[0, 1] = abc_filter.R[1, 0] = measurement_covariance_R01R10
 
     # Control inputs (defaults)
     abc_filter.B = None  # np.ndarray([a])
@@ -120,13 +117,11 @@ def run_filter(
     # store the parameters in the list_args
     (
         s_noise_Q00,
-        Q01,
-        Q10,
         r_noise_Q11,
+        Qdiag,
         q_meas_error_R00,
-        R01,
-        R10,
         r_meas_error_R11,
+        Rdiag,
     ) = list_args
 
     kf = init_filter(
@@ -136,12 +131,10 @@ def run_filter(
         r_variance_P11=100,
         s_noise_Q00=s_noise_Q00,
         r_noise_Q11=r_noise_Q11,
-        Q01=Q01,
-        Q10=Q10,
+        process_covariance_Q01Q10=Qdiag,
         q_meas_error_R00=q_meas_error_R00,
         r_meas_error_R11=r_meas_error_R11,
-        R01=R01,
-        R10=R10,
+        measurement_covariance_R01R10=Rdiag,
     )
 
     s = Saver(kf)
@@ -221,19 +214,17 @@ if __name__ == "__main__":
     np.random.seed(1)
 
     # --- HYPER PARAMETERS --- #
-    OPTIMIZER = "min"  #  "de"    "min"
+    OPTIMIZER = "de"  #  "de"    "min"
 
-    #          Q00,         Q01,         Q10,         Q11
-    #          R00,         R01,         R10,         R11
+    #          Q00,         Q11,         Qdiag
+    #          R00,         R11,         Rdiag
     bounds = [
-        (1e-9, 1e5),
-        (1e-9, 1e5),
-        (1e-9, 1e2),
-        (10, 1e5),
-        (1e-9, 1e5),
-        (1e-9, 1e5),
-        (1e-9, 1e5),
-        (1e-9, 1e5),
+        (1e-9, 1e5),    # Q00
+        (10, 1e5),    # Q11
+        (0, 10),      # Qdiag
+        (1e-9, 1e5),    # R00
+        (1e-9, 1e5),    # R11
+        (0, 10),    # Rdiag
     ]
 
     data = read_data()
@@ -242,7 +233,7 @@ if __name__ == "__main__":
     iso_time = time.strftime("%H:%M:%S", time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
     print(f"Optimizer: {OPTIMIZER}")
-    print(f"Bounds ([Q00, Q01, Q10, Q11, R00, R01, R10, R11]) :\n\t{bounds}")
+    print(f"Bounds ([Q00, Q11, Qdiag, R00, R11, Rdiag]) :\n\t{bounds}")
 
     # --- RUN OPTIMIZATION --- #
     if OPTIMIZER == "de":
@@ -250,11 +241,11 @@ if __name__ == "__main__":
         res = differential_evolution(
             kf_neg_log_likelihood, bounds, args=(data,), maxiter=100, popsize=20
         )
-        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
+        Q00, Q11, Qdiag, R00, R11, Rdiag, = res.x
 
     elif OPTIMIZER == "min":
         # intial guess required
-        x0 = [1, 1, 1, 1, 1, 1, 1, 1]
+        x0 = [1, 1, 1, 1, 1, 1]
         res = optimize.minimize(
             kf_neg_log_likelihood,
             x0,
@@ -262,11 +253,11 @@ if __name__ == "__main__":
             bounds=bounds,
             tol=1e-9
         )
-        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
+        Q00, Q11, Qdiag, R00, R11, Rdiag = res.x
 
     else:
         print("No Optimizer Run ...")
-        Q00, Q01, Q10, Q11, R00, R01, R10, R11 = [5.9781, 0, 0, 0.6406, 0.1, 0, 0, 0.1]
+        Q00, Q11, Qdiag, R00, R11, Rdiag = [5.9781, 0.6406, 0, 0.1, 0.1, 0]
 
     # --- PRINT TIME TAKEN --- #
     total_time = time.time() - start_time
@@ -281,21 +272,9 @@ if __name__ == "__main__":
     print(f"Maximum Log Likelihood: {-res.fun:.2f}")
 
     # --- CHECK THE OPTIMIZED FILTER --- #
-    # [Q00, Q11, R00, R11] = [365.837, 3.997e-06, 1e-09, 1e-09]
-    # [Q00, Q11, R00, R11] = [367.3850, 0.1627, 0.0100, 0.0100],
-    # [Q00, Q11, R00, R11] = [5.9781, 0.6406, 0.1000, 0.1000]
-    # [Q00, Q11, R00, R11] = [5.8364, 1.9522, 1.000, 1.000]
+    # Q00, Q11, Qdiag, R00, R11, Rdiag = np.array([7.44753973e+03, 2.33102658e+04, 4.67258902e+00, 4.17816027e+04, 5.52687495e+04, 4.53929966e+04, 7.26319782e+04, 5.71404079e+04])
 
-    # params = [
-    #     [365.837, 3.997e-06, 1e-09, 1e-09],
-    #     [367.3850, 0.1627, 0.0100, 0.0100],
-    #     [5.9781, 0.6406, 0.1000, 0.1000],
-    #     [5.8364, 1.9522, 1.000, 1.000],
-    # ]
-
-    # for param in params:
-    # [Q00, Q11, R00, R11] = param
-    kf, s, ll = run_filter([Q00, Q01, Q10, Q11, R00, R01, R10, R11], data)
+    kf, s, ll = run_filter([Q00, Q11, Qdiag, R00, R11, Rdiag], data)
 
     data = update_data_columns(data, s)
 
