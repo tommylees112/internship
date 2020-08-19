@@ -101,10 +101,12 @@ def init_filter(
     return abc_filter
 
 
-def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter, Saver]:
+def run_filter(
+    list_args: List[float], data: pd.DataFrame
+) -> Tuple[KalmanFilter, Saver]:
 
     if isinstance(data, tuple):
-        # data is the first *args
+        #  data is the first *args
         data = data[0]
 
     # store the parameters in the list_args
@@ -167,7 +169,7 @@ def update_data_columns(data: pd.DataFrame, s: Saver):
     return data
 
 
-# --- FUNCTIONS --- # 
+# --- FUNCTIONS --- #
 def read_data(data_dir: Path = Path("data")) -> pd.DataFrame:
     df = pd.read_csv(data_dir / "39034_2010.csv")
     df["q_obs"] = df["discharge_spec"]
@@ -184,7 +186,7 @@ def print_latex_matrices(s: Saver):
         f"0 & {Q[1, 1]:.4f}"
         "\\end{array}\\right]"
     )
-    print("\\\ \\\\") # evaluates to -> "\\ \\"
+    print("\\\ \\\\")  #  evaluates to -> "\\ \\"
     print(
         "R=\\left[\\begin{array}{cc}"
         f"{R[0, 0]:.4f} & 0 \\\ "
@@ -198,27 +200,29 @@ if __name__ == "__main__":
     np.random.seed(1)
 
     # --- HYPER PARAMETERS --- #
-    OPTIMIZER = "min"  # "de"    "min"
+    OPTIMIZER = "min"  #  "de"    "min"
     #          Q00,         Q11,         R00,         R11
     bounds = [(1e-9, 1e7), (1000, 1e7), (0.01, 1e7), (0.01, 1e7)]
 
     data = read_data()
 
     start_time = time.time()
-    iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
+    iso_time = time.strftime("%H:%M:%S", time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
     print(f"Bounds:\n\t[Q00, Q11, R00, R11] : {bounds}")
 
     # --- RUN OPTIMIZATION --- #
     if OPTIMIZER == "de":
         # no initial guess required
-        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=10)
+        res = differential_evolution(
+            kf_neg_log_likelihood, bounds, args=(data,), maxiter=100, popsize=10
+        )
         Q00, Q11, R00, R11 = res.x
 
     elif OPTIMIZER == "min":
         # intial guess required
         x0 = [1, 1, 1, 1]
-        res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data, ), bounds=bounds, )
+        res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data,), bounds=bounds,)
         Q00, Q11, R00, R11 = res.x
 
     else:
@@ -227,9 +231,13 @@ if __name__ == "__main__":
 
     # --- PRINT TIME TAKEN --- #
     total_time = time.time() - start_time
-    iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
+    iso_time = time.strftime("%H:%M:%S", time.localtime(time.time()))
     print(f"Optimizers finished ... {iso_time}")
-    time_taken = f"{total_time // 60:.0f}:{total_time % 60:02.0f} min:sec" if total_time > 60 else f"{total_time} seconds"
+    time_taken = (
+        f"{total_time // 60:.0f}:{total_time % 60:02.0f} min:sec"
+        if total_time > 60
+        else f"{total_time} seconds"
+    )
     print(f"---- {time_taken} ----")
     print(f"Maximum Log Likelihood: {-res.fun:.2f}")
 
@@ -247,7 +255,7 @@ if __name__ == "__main__":
     # ]
 
     # for param in params:
-        # [Q00, Q11, R00, R11] = param
+    # [Q00, Q11, R00, R11] = param
     kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
 
     data = update_data_columns(data, s)
@@ -256,5 +264,10 @@ if __name__ == "__main__":
 
     fig, ax = plot_discharge_predictions(data, filtered_prior=False, plusR=True)
     ax.set_ylim(-0.1, 4.5)
-    fig.savefig(f"/Users/tommylees/Downloads/data_{int(random.random() * 100)}.png")
 
+    if Path(".").absolute().home().as_posix() == "/home/tommy":
+        # server
+        pass
+    elif Path(".").absolute().home().as_posix() == "/Users/tommylees":
+        # personal laptop
+        fig.savefig(f"/Users/tommylees/Downloads/data_{int(random.random() * 100)}.png")

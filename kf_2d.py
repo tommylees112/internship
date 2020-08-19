@@ -336,17 +336,14 @@ if __name__ == "__main__":
     plt.close("all")
 
     d = data.copy()
-    d = d.rename(dict(
-        precipitation='r',
-        discharge_spec='y',
-        S_prior='S',
-        q_prior="y_hat",
-    ), axis=1)
+    d = d.rename(
+        dict(precipitation="r", discharge_spec="y", S_prior="S", q_prior="y_hat",),
+        axis=1,
+    )
     d["y_t-1"] = d["y"].shift(1)
     d = d[["time", "y", "r", "S", "y_hat", "y_t-1"]]
     d["target"] = d["y"] - d["y_hat"]
     d["input"] = tuple(zip(d["y_t-1"], d["y_hat"], d["r"]))
-
 
 
 # means = s.x[:, 0, 0]
