@@ -2,6 +2,7 @@
 from pathlib import Path
 import datetime
 import random
+import time
 from typing import Dict, Tuple, Optional, Union, Any, List
 
 # nearly standard library
@@ -116,22 +117,26 @@ def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter
     )
 
     s = Saver(kf)
+    lls = []
 
     for z in np.vstack([data["q_obs"], data["r_obs"]]).T:
         kf.predict()
         kf.update(z)
+        log_likelihood = kf.log_likelihood_of(z)
+        lls.append(lls)
         s.save()
 
     s.to_array()
+    lls = np.array(lls)
 
-    return kf, s
+    return kf, s, lls
 
 
 def kf_neg_log_likelihood(x: List[float], *args):
     # return the negative log likelihood of the KF
     data = args[0]
-    _, s = run_filter(x, data)
-    return -np.sum(s.log_likelihood)
+    kf, s, log_likelihoods = run_filter(x, data)
+    return -(log_likelihoods.sum())
 
 
 def update_data_columns(data: pd.DataFrame, s: Saver):
@@ -178,20 +183,40 @@ def print_latex_matrices(s: Saver):
 
 
 if __name__ == "__main__":
+    OPTIMIZER = "fmin"  # "de"  "fmin"
     random.seed(1)
     np.random.seed(1)
 
     data = read_data()
-    #          Q00,         Q11,         R00,         R11
-    bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
-    res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
 
-    (
-            Q00,            Q11,             R00,            R11
-    ) = x = [4.67129328e+05, 4.88503837e+06, 1.00000000e-09, 1.35341464e+06]
-    # Q00, Q11, R00, R11 = res.x
 
-    kf, s = run_filter([Q00, Q11, R00, R11], data)
+    # --- RUN OPTIMIZATION --- #
+    start_time = time.time()
+    print("Running Optimizers ...")
+    if OPTIMIZER == "de":
+        #          Q00,         Q11,         R00,         R11
+        bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
+        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
+        Q00, Q11, R00, R11 = res.x
+    elif OPTIMIZER == "fmin":
+        x0 = [1082819.4627674185, 276060.11954468256,
+                761.0797488101862, 4762115.787475227]
+        res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
+        Q00, Q11, R00, R11 = res.x
+
+    else:
+        print("No Optimizer Run ...")
+        Q00, Q11, R00, R11 = [1082819.4627674185,
+                            276060.11954468256, 761.0797488101862, 4762115.787475227]
+
+
+    t = time.time() - start_time
+    print(f"Optimizers finished:\n---- {t:.1f} seconds ----")
+    # --- CHECK THE OPTIMIZED FILTER --- #
+    # [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
+
+
+    kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
 
     data = update_data_columns(data, s)
 
@@ -200,3 +225,4 @@ if __name__ == "__main__":
     fig, ax = plot_discharge_predictions(
         data, filtered_prior=False, plusR=True)
     ax.set_ylim(-0.1, 4.5)
+
