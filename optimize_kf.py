@@ -194,7 +194,10 @@ def print_latex_matrices(s: Saver):
 
 
 if __name__ == "__main__":
-    OPTIMIZER = "min"  # "de"    "min"
+    OPTIMIZER = "de"  # "de"    "min"
+    #          Q00,         Q11,         R00,         R11
+    bounds = [(1e-9, 1e7), (1e-9, 1e7), (1, 1e7), (1, 1e7)]
+
     random.seed(1)
     np.random.seed(1)
 
@@ -206,21 +209,19 @@ if __name__ == "__main__":
     print(f"Running Optimizers ... {iso_time}")
 
     if OPTIMIZER == "de":
-        #          Q00,         Q11,         R00,         R11
-        bounds = [(1e-9, 1e7), (1e-9, 1e7), (0.1, 1e7), (0.1, 1e7)]
+        # no initial guess required
         res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=10)
         Q00, Q11, R00, R11 = res.x
 
     elif OPTIMIZER == "min":
+        # intial guess required
         x0 = [1, 1, 1, 1]
-        bounds = [(1e-9, 1e7), (1e-9, 1e7), (0.01, 1e7), (0.01, 1e7)]
         res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data, ), bounds=bounds, )
         Q00, Q11, R00, R11 = res.x
 
     else:
         print("No Optimizer Run ...")
-        Q00, Q11, R00, R11 = [1082819.4627674185,
-                            276060.11954468256, 761.0797488101862, 4762115.787475227]
+        Q00, Q11, R00, R11 = [5.9781, 0.6406, 1, 1]
 
     t = time.time() - start_time
     iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
@@ -230,6 +231,7 @@ if __name__ == "__main__":
     # --- CHECK THE OPTIMIZED FILTER --- #
     # [Q00, Q11, R00, R11] = [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
     # [Q00, Q11, R00, R11] = [365.8369655321846, 3.996708697010645e-06, 1e-09, 1e-09]
+    # [Q00, Q11, R00, R11] = [5.9781, 0.6406, 0.1000, 0.1000]
 
     kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
 
