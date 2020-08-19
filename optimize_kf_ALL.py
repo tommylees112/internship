@@ -221,7 +221,7 @@ if __name__ == "__main__":
     np.random.seed(1)
 
     # --- HYPER PARAMETERS --- #
-    OPTIMIZER = "de"  #  "de"    "min"
+    OPTIMIZER = "min"  #  "de"    "min"
 
     #          Q00,         Q01,         Q10,         Q11
     #          R00,         R01,         R10,         R11
@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
     elif OPTIMIZER == "min":
         # intial guess required
-        x0 = [1, 1, 1, 1]
+        x0 = [1, 1, 1, 1, 1, 1, 1, 1]
         res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data,), bounds=bounds,)
         Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
 
