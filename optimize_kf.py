@@ -208,9 +208,8 @@ if __name__ == "__main__":
         x0 = [1082819.4627674185, 276060.11954468256,
                 761.0797488101862, 4762115.787475227]
 
-        kf_neg_log_likelihood(x0, (data, ))
-        # res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
-        # Q00, Q11, R00, R11 = res.x
+        res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
+        Q00, Q11, R00, R11 = res.x
 
     else:
         print("No Optimizer Run ...")
@@ -223,7 +222,7 @@ if __name__ == "__main__":
     print(f"Optimizers finished ... {iso_time}\n---- {t:.1f} seconds ----")
 
     # --- CHECK THE OPTIMIZED FILTER --- #
-    [Q00, Q11, R00, R11] = [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
+    # [Q00, Q11, R00, R11] = [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
 
     kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
 
@@ -231,7 +230,7 @@ if __name__ == "__main__":
 
     print_latex_matrices(s)
 
-    fig, ax = plot_discharge_predictions(
-        data, filtered_prior=False, plusR=True)
+    fig, ax = plot_discharge_predictions(data, filtered_prior=False, plusR=True)
     ax.set_ylim(-0.1, 4.5)
+    plt.show()
 
