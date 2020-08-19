@@ -200,7 +200,7 @@ if __name__ == "__main__":
     # --- HYPER PARAMETERS --- #
     OPTIMIZER = "de"  # "de"    "min"
     #          Q00,         Q11,         R00,         R11
-    bounds = [(1e-9, 1e7), (10, 1e7), (0.01, 1e7), (0.01, 1e7)]
+    bounds = [(1e-9, 1e7), (1000, 1e7), (0.01, 1e7), (0.01, 1e7)]
 
     data = read_data()
 
