@@ -198,7 +198,7 @@ if __name__ == "__main__":
     np.random.seed(1)
 
     # --- HYPER PARAMETERS --- #
-    OPTIMIZER = "de"  # "de"    "min"
+    OPTIMIZER = "min"  # "de"    "min"
     #          Q00,         Q11,         R00,         R11
     bounds = [(1e-9, 1e7), (1000, 1e7), (0.01, 1e7), (0.01, 1e7)]
 
