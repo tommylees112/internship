@@ -192,7 +192,9 @@ if __name__ == "__main__":
 
     # --- RUN OPTIMIZATION --- #
     start_time = time.time()
-    print("Running Optimizers ...")
+    iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
+    print(f"Running Optimizers ... {iso_time}")
+
     if OPTIMIZER == "de":
         #          Q00,         Q11,         R00,         R11
         bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
@@ -211,7 +213,9 @@ if __name__ == "__main__":
 
 
     t = time.time() - start_time
-    print(f"Optimizers finished:\n---- {t:.1f} seconds ----")
+    iso_time = time.strftime('%H:%M:%S', time.localtime(time.time()))
+    print(f"Optimizers finished ... {iso_time}\n---- {t:.1f} seconds ----")
+
     # --- CHECK THE OPTIMIZED FILTER --- #
     # [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
 
