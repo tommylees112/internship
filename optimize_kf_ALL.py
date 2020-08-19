@@ -225,7 +225,8 @@ if __name__ == "__main__":
     start_time = time.time()
     iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
     print(f"Running Optimizers ... {iso_time}")
-    print(f"Bounds:\n\t[Q00, Q01, Q10, Q11, R00, R01, R10, R11] : {bounds}")
+    print(f"Optimizer: {OPTIMIZER}")
+    print(f"Bounds ([Q00, Q01, Q10, Q11, R00, R01, R10, R11]) :\n\t{bounds}")
 
     # --- RUN OPTIMIZATION --- #
     if OPTIMIZER == "de":
