@@ -202,11 +202,11 @@ if __name__ == "__main__":
     if OPTIMIZER == "de":
         #          Q00,         Q11,         R00,         R11
         bounds = [(1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7), (1e-9, 1e7)]
-        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=10, popsize=10)
+        res = differential_evolution(kf_neg_log_likelihood, bounds, args=(data, ), maxiter=100, popsize=10)
         Q00, Q11, R00, R11 = res.x
     elif OPTIMIZER == "fmin":
-        x0 = [1082819.4627674185, 276060.11954468256,
-                761.0797488101862, 4762115.787475227]
+        x0 = [1, 1,
+              1, 1]
 
         res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
         Q00, Q11, R00, R11 = res.x
