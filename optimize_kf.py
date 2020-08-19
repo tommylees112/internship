@@ -188,7 +188,7 @@ def print_latex_matrices(s: Saver):
 
 
 if __name__ == "__main__":
-    OPTIMIZER = "fmin"  # "de"  "fmin"
+    OPTIMIZER = "de"  # "de"  "fmin"
     random.seed(1)
     np.random.seed(1)
 
