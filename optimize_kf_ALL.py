@@ -255,7 +255,13 @@ if __name__ == "__main__":
     elif OPTIMIZER == "min":
         # intial guess required
         x0 = [1, 1, 1, 1, 1, 1, 1, 1]
-        res = optimize.minimize(kf_neg_log_likelihood, x0, args=(data,), bounds=bounds,)
+        res = optimize.minimize(
+            kf_neg_log_likelihood,
+            x0,
+            args=(data,),
+            bounds=bounds,
+            tol=1e-9
+        )
         Q00, Q01, Q10, Q11, R00, R01, R10, R11 = res.x
 
     else:
