@@ -102,6 +102,11 @@ def init_filter(
 
 
 def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter, Saver]:
+
+    if isinstance(data, tuple):
+        # data is the first *args
+        data = data[0]
+
     # store the parameters in the list_args
     s_noise_Q00, r_noise_Q11, q_meas_error_R00, r_meas_error_R11 = list_args
 
@@ -123,7 +128,7 @@ def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter
         kf.predict()
         kf.update(z)
         log_likelihood = kf.log_likelihood_of(z)
-        lls.append(lls)
+        lls.append(log_likelihood)
         s.save()
 
     s.to_array()
@@ -134,8 +139,8 @@ def run_filter(list_args: List[float], data: pd.DataFrame) -> Tuple[KalmanFilter
 
 def kf_neg_log_likelihood(x: List[float], *args):
     # return the negative log likelihood of the KF
-    data = args[0]
-    kf, s, log_likelihoods = run_filter(x, data)
+    # data = args[0]
+    kf, s, log_likelihoods = run_filter(x, *args)
     return -(log_likelihoods.sum())
 
 
@@ -189,7 +194,6 @@ if __name__ == "__main__":
 
     data = read_data()
 
-
     # --- RUN OPTIMIZATION --- #
     start_time = time.time()
     iso_time = time.strftime('%H:%M:%S', time.localtime(start_time))
@@ -203,8 +207,10 @@ if __name__ == "__main__":
     elif OPTIMIZER == "fmin":
         x0 = [1082819.4627674185, 276060.11954468256,
                 761.0797488101862, 4762115.787475227]
-        res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
-        Q00, Q11, R00, R11 = res.x
+
+        kf_neg_log_likelihood(x0, (data, ))
+        # res = optimize.fmin(kf_neg_log_likelihood, x0, args=(data, ))
+        # Q00, Q11, R00, R11 = res.x
 
     else:
         print("No Optimizer Run ...")
@@ -217,8 +223,7 @@ if __name__ == "__main__":
     print(f"Optimizers finished ... {iso_time}\n---- {t:.1f} seconds ----")
 
     # --- CHECK THE OPTIMIZED FILTER --- #
-    # [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
-
+    [Q00, Q11, R00, R11] = [1082819.4627674185, 276060.11954468256, 761.0797488101862, 4762115.787475227]
 
     kf, s, ll = run_filter([Q00, Q11, R00, R11], data)
 
