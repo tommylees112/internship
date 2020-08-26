@@ -57,9 +57,7 @@ def abc(
 
 
 def hx(
-    prior_sigma: np.ndarray,
-    r: float,
-    params: Dict[str, float] = parameters
+    prior_sigma: np.ndarray, r: float, params: Dict[str, float] = parameters
 ) -> float:
     """Create the measurement function to turn
     prior_sigma (x) into measurement space (z).
@@ -166,8 +164,8 @@ if __name__ == "__main__":
     station_id = 39034
 
     # --- HYPERPARAMETERS --- #
-    Q00_s_noise = 10  # 10
-    R = 1e-2  # 1e-2
+    Q00_s_noise = 10  #  10
+    R = 1e-2  #  1e-2
     alpha = 1e-3
     beta = 2
     kappa = 1
@@ -217,7 +215,6 @@ if __name__ == "__main__":
     ax.set_ylim(-0.1, 4.5)
     plt.show()
     fig.savefig(plot_dir / f"001_discharge_preds_{int( random.random() * 100 )}")
-
 
     fig, ax = plt.subplots()
     data.plot.scatter("q_obs", "q_filtered", c="q_variance", colormap="viridis", ax=ax)

@@ -24,6 +24,7 @@ from abc_model import PARAMETERS as parameters
 from abc_model import abcmodel, abcmodel_matrix, abc_simulate, read_data
 from utils import print_latex_matrices, update_data_columns
 from abc_plots import plot_std_bands, plot_filtered_true_obs, plot_discharge_predictions
+from abc_simulation import ABCSimulation
 
 
 def abc(
@@ -57,9 +58,7 @@ def abc(
 
 
 def hx(
-    prior_sigma: np.ndarray,
-    r: float,
-    params: Dict[str, float] = parameters
+    prior_sigma: np.ndarray, r: float, params: Dict[str, float] = parameters
 ) -> float:
     """Create the measurement function to turn
     prior_sigma (x) into measurement space (z).
@@ -102,7 +101,7 @@ def init_filter(
 
     Args:
         S0 (float, optional): [description]. Defaults to 5.74.
-        S_var (float, optional): [description]. Defaults to 1.
+        S_var (float, optional): P_t=0. Defaults to 1.
         Q00_s_noise (float, optional): [description]. Defaults to 0.01.
         R (float, optional): [description]. Defaults to 1.
         h (Callable, optional): [description]. Defaults to hx.
@@ -165,27 +164,42 @@ if __name__ == "__main__":
 
     station_id = 39034
 
-    # --- HYPERPARAMETERS --- #
-    Q00_s_noise = 10  #  10
-    R = 1e-2  #  1e-2
+    # --- DATA HYPERPARAMETERS --- #
+    std_q_obs = 0.1
+    std_r_obs = 1
+    std_abc = 0.01
+    std_S0 = 0.01
+
+    # --- UKF HYPERPARAMETERS --- #
+    Q00_s_noise = 1  #  10
+    R = 1e-1  #  1e-2
     alpha = 1e-3
     beta = 2
     kappa = 1
 
     # --- DATA --- #
-    original_data = read_data(data_dir)
-    data = original_data.copy()
-    data["q_prior"], data["S_prior"] = abc_simulate(data["r_obs"])
+    simulator = ABCSimulation(
+        data_dir,
+        std_q_obs=std_q_obs,
+        std_r_obs=std_r_obs,
+        std_abc=std_abc,
+        std_S0=std_S0,
+    )
+    data = simulator.data
+    a_est, b_est, c_est = simulator.a_est, simulator.b_est, simulator.c_est
+    a_true, b_true, c_true = simulator.a_true, simulator.b_true, simulator.c_true
+    S0_est = simulator.S0_est
+    S0_true = simulator.S0_true
 
     # --- INIT FILTER --- #
     ukf = init_filter(
-        S0=5.74,
+        S0=S0_est,
         S_var=1,
         Q00_s_noise=Q00_s_noise,
         R=R,
         h=hx,
         f=abc,
-        params=parameters,
+        params=dict(a=a_est, b=b_est, c=c_est),
         alpha=alpha,
         beta=beta,
         kappa=kappa,
@@ -212,21 +226,16 @@ if __name__ == "__main__":
     print_latex_matrices(s)
 
     # --- PLOTS --- #
-    fig, ax = plot_discharge_predictions(
-        data, filtered_prior=False, plusR=False)
+    fig, ax = plot_discharge_predictions(data, filtered_prior=False, plusR=False)
     ax.set_title(f"Predicted Discharge\nR: {R} Q: {Q00_s_noise}")
     ax.set_ylim(-0.1, 4.5)
     plt.show()
-    fig.savefig(
-        plot_dir / f"001_discharge_preds_{int( random.random() * 100 )}")
+    # fig.savefig(plot_dir / f"001_discharge_preds_{int( random.random() * 100 )}")
 
-    fig, ax = plt.subplots()
-    data.plot.scatter("q_obs", "q_filtered", c="q_variance",
-                      colormap="viridis", ax=ax)
-    ax.set_title(
-        f"Comparison with Observed Discharge\nR: {R} Q: {Q00_s_noise}")
-    ax.set_xlabel("$q_{obs}$ [$mm day^{-1} km^{-2}$]")
-    ax.set_ylabel("$q_{filtered}$ [$mm day^{-1} km^{-2}$]")
-    sns.despine()
-    fig.savefig(
-        plot_dir / f"002_obs_filtered_scatter_{int( random.random() * 100 )}")
+    # fig, ax = plt.subplots()
+    # data.plot.scatter("q_obs", "q_filtered", c="q_variance", colormap="viridis", ax=ax)
+    # ax.set_title(f"Comparison with Observed Discharge\nR: {R} Q: {Q00_s_noise}")
+    # ax.set_xlabel("$q_{obs}$ [$mm day^{-1} km^{-2}$]")
+    # ax.set_ylabel("$q_{filtered}$ [$mm day^{-1} km^{-2}$]")
+    # sns.despine()
+    # fig.savefig(plot_dir / f"002_obs_filtered_scatter_{int( random.random() * 100 )}")

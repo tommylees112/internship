@@ -28,17 +28,9 @@ def print_latex_matrices(s: Saver):
         Q = s.Q[0, :].flatten()
         R = s.R[0, :].flatten()
         # 1D Kalman Filter
-        print(
-            "Q=\\left[\\begin{array}{cc}"
-            f"{float(Q[0]):.4f}"
-            "\\end{array}\\right]"
-        )
+        print("Q=\\left[\\begin{array}{cc}" f"{float(Q[0]):.4f}" "\\end{array}\\right]")
         print("\\\ \\\\")  #  evaluates to -> "\\ \\"
-        print(
-            "R=\\left[\\begin{array}{cc}"
-            f"{float(R[0]):.4f}"
-            "\\end{array}\\right]"
-        )
+        print("R=\\left[\\begin{array}{cc}" f"{float(R[0]):.4f}" "\\end{array}\\right]")
     else:
         print(
             f"The shape of the matrices ({s.Q.shape[1:]}) has not yet been implemented"

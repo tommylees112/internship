@@ -1,6 +1,6 @@
 """ABC Model Simulation Functions
 """
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
 import numpy as np
 import pandas as pd
 from collections import Iterable
