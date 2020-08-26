@@ -12,7 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # Kalman Filter
-# import filterpy.kalman as kf
+import filterpy.kalman as kf
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Saver
 
@@ -213,75 +213,43 @@ if __name__ == "__main__":
     random.seed(1)
     np.random.seed(1)
 
-    # --- HYPER PARAMETERS --- #
-    OPTIMIZER = "min"  #  "de"    "min"
-
-    #          Q00,         Q11,         Qdiag
-    #          R00,         R11,         Rdiag
-    bounds = [
-        (1e-9, 1e5),  # Q00
-        (10, 1e5),  # Q11
-        (0, 10),  # Qdiag
-        (1e-9, 1e5),  # R00
-        (1e-9, 1e5),  # R11
-        (0, 10),  # Rdiag
-    ]
+    plot_dir = Path("/Users/tommylees/Downloads/plots")
+    plot_dir = plot_dir / "Rdiag"
+    plot_dir.mkdir(exist_ok=True, parents=True)
 
     data = read_data()
 
-    start_time = time.time()
-    iso_time = time.strftime("%H:%M:%S", time.localtime(start_time))
-    print(f"Running Optimizers ... {iso_time}")
-    print(f"Optimizer: {OPTIMIZER}")
-    print(f"Bounds ([Q00, Q11, Qdiag, R00, R11, Rdiag]) :\n\t{bounds}")
+    # --- RUN FILTER --- #
+    for i, rdiag in enumerate(np.linspace(0, 3.5, 40)):
+        Q00, Q11, Qdiag, R00, R11, Rdiag = [
+            2.5,
+            1000,
+            0,
+            0.1,
+            1.0,
+            rdiag,
+        ]
 
-    # --- RUN OPTIMIZATION --- #
-    if OPTIMIZER == "de":
-        # no initial guess required
-        res = differential_evolution(
-            kf_neg_log_likelihood, bounds, args=(data,), maxiter=100, popsize=20
-        )
-        Q00, Q11, Qdiag, R00, R11, Rdiag, = res.x
+        try:
+            kf, s, ll = run_filter([Q00, Q11, Qdiag, R00, R11, Rdiag], data)
+        except ValueError:
+            # ValueError: the input matrix must be positive semidefinite
+            continue
 
-    elif OPTIMIZER == "min":
-        # intial guess required
-        x0 = [1, 1, 1, 1, 1, 1]
-        res = optimize.minimize(
-            kf_neg_log_likelihood, x0, args=(data,), bounds=bounds, tol=1e-9
-        )
-        Q00, Q11, Qdiag, R00, R11, Rdiag = res.x
+        data = update_data_columns(data, s)
 
-    else:
-        print("No Optimizer Run ...")
-        Q00, Q11, Qdiag, R00, R11, Rdiag = [5.9781, 0.6406, 0, 0.1, 0.1, 0]
+        # print_latex_matrices(s)
 
-    # --- PRINT TIME TAKEN --- #
-    total_time = time.time() - start_time
-    iso_time = time.strftime("%H:%M:%S", time.localtime(time.time()))
-    print(f"Optimizers finished ... {iso_time}")
-    time_taken = (
-        f"{total_time // 60:.0f}:{total_time % 60:02.0f} min:sec"
-        if total_time > 60
-        else f"{total_time} seconds"
-    )
-    print(f"---- {time_taken} ----")
-    print(f"Maximum Log Likelihood: {-res.fun:.2f}")
+        fig, ax = plot_discharge_predictions(data, filtered_prior=False, plusR=True)
+        ax.set_ylim(-0.1, 4.5)
+        ax.set_title(f"QDiag: {Qdiag:.2f} RDiag: {Rdiag:.2f}")
 
-    # --- CHECK THE OPTIMIZED FILTER --- #
-    # Q00, Q11, Qdiag, R00, R11, Rdiag = np.array([7.44753973e+03, 2.33102658e+04, 4.67258902e+00, 4.17816027e+04, 5.52687495e+04, 4.53929966e+04, 7.26319782e+04, 5.71404079e+04])
-    # Q00, Q11, Qdiag, R00, R11, Rdiag = np.array([18.8408, 13.2965, 3.4566, 0.0537, 6.0765, 0.6725])
+        if Path(".").absolute().home().as_posix() == "/home/tommy":
+            # server
+            pass
+        elif Path(".").absolute().home().as_posix() == "/Users/tommylees":
+            # personal laptop
+            fig.savefig(plot_dir / f"{i:03}_data_Rdiag{Rdiag:.2f}_Qdiag{Qdiag:.2f}.png")
 
-    kf, s, ll = run_filter([Q00, Q11, 0, R00, R11, 0], data)
-
-    data = update_data_columns(data, s)
-
-    print_latex_matrices(s)
-
-    fig, ax = plot_discharge_predictions(data, filtered_prior=False, plusR=True)
-    ax.set_ylim(-0.1, 4.5)
-    if Path(".").absolute().home().as_posix() == "/home/tommy":
-        # server
-        pass
-    elif Path(".").absolute().home().as_posix() == "/Users/tommylees":
-        # personal laptop
-        fig.savefig(f"/Users/tommylees/Downloads/data_{int(random.random() * 100)}.png")
+        if i % 10 == 0:
+            plt.close("all")

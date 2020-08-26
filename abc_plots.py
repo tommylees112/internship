@@ -272,8 +272,8 @@ def plot_discharge_predictions(
     #
     ax.plot(
         data.index,
-        data["q_prior2"] if filtered_prior else data["q_prior"],
-        label="$q_{prior}$",
+        data["q_x_prior"] if filtered_prior else data["q_prior"],
+        label="$q_{prior}$" if filtered_prior else "$q_{unfiltered}$",
         ls=":",
         color=sns.color_palette()[1],
     )

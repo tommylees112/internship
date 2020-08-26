@@ -4,13 +4,14 @@ from typing import Tuple, Optional
 import numpy as np
 import pandas as pd
 from collections import Iterable
+from pathlib import Path
 
 
 # fit for station 39034 (fit previously)
 PARAMETERS = {"a": 0.398887110522937, "b": 0.595108762279152, "c": 0.059819062467189064}
 
 
-def abcmodel(S: float, P: float) -> Tuple[float, float]:
+def abcmodel(S: float, P: float, parameters: Dict = PARAMETERS) -> Tuple[float, float]:
     """Simulate ONE timestep with *all parameters
     explicitly calculated. Best for learning/pedagogy.
 
@@ -21,9 +22,9 @@ def abcmodel(S: float, P: float) -> Tuple[float, float]:
     Returns:
         Tuple[float, float]: qsim, storage
     """
-    a = PARAMETERS["a"]
-    b = PARAMETERS["b"]
-    c = PARAMETERS["c"]
+    a = parameters["a"]
+    b = parameters["b"]
+    c = parameters["c"]
 
     # losses
     L = b * P
@@ -52,11 +53,12 @@ def abcmodel_matrix(
         [ c(1 - c) ** 0, c(1 - c) ** 1, c(1 - c) ** 2 ]
 
     Contribution from precipitation (diagonal) + the contribution from
-     previous storage values (declines over time).
+     previous storage values (declines over time). Lower triangular.
     A:
-       [ (1 - a - b)    , 0.           , 0.         ]
-       [ ac(1 - c) ** 0 , (1 - a - b)  , 0.         ]
-       [ ac(1 - c) ** 1 , ac(1 - c)**0 , (1 - a - b)]
+       [ (1 - a - b)    , 0.           , 0.          , 0.         ]
+       [ ac(1 - c) ** 0 , (1 - a - b)  , 0.          , 0.         ]
+       [ ac(1 - c) ** 1 , ac(1 - c)**0 , (1 - a - b) , 0.         ]
+       [ ac(1 - c) ** 2 , ac(1 - c)**1 , ac(1 - c)**0, (1 - a - b)]
 
     Args:
         S0 (float): intial storage value
@@ -117,7 +119,10 @@ def test_matrix_vs_ordinary(P: np.ndarray, S0: float = 5.74) -> pd.DataFrame:
 
 
 def abc_simulate(
-    precip: Iterable, S0: float = 5.74, matrix: bool = False
+    precip: Iterable,
+    S0: float = 5.74,
+    matrix: bool = False,
+    parameters: Dict = PARAMETERS,
 ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
     """Helper function to simulate using either matrix or original formulation.
 
@@ -130,7 +135,7 @@ def abc_simulate(
         np.ndarray: vector of qsim values
     """
     if matrix:
-        qsim = abcmodel_matrix(S0=S0, P=precip, **PARAMETERS)
+        qsim = abcmodel_matrix(S0=S0, P=precip, **parameters)
 
         return qsim, None
     else:
@@ -146,3 +151,10 @@ def abc_simulate(
         storage = np.array(storages)
 
         return qsim, storage
+
+
+def read_data(data_dir: Path = Path("data")) -> pd.DataFrame:
+    df = pd.read_csv(data_dir / "39034_2010.csv")
+    df["q_obs"] = df["discharge_spec"]
+    df["r_obs"] = df["precipitation"]
+    return df
