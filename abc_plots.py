@@ -505,3 +505,18 @@ def plot_std_bands(
     sns.despine()
 
     return fig, ax
+
+
+def plot_1_1_line(ax):
+    # plot 1:1 line
+    # (the x-axis min -> max)
+    ax.plot(
+        np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 20),
+        np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 20),
+        ls="--",
+        c="k",
+        alpha=1,
+        label="1:1 Line",
+    )
+
+    return ax
