@@ -65,7 +65,6 @@ class ABCSimulation:
         # 2. simulate the uncertain data
         self.simulate_uncertain_data()
 
-
     def load_data(self):
         df = pd.read_csv(self.data_dir / "39034_2010.csv")
         assert all(np.isin(["precipitation", "discharge_spec"], df.columns))
@@ -76,7 +75,11 @@ class ABCSimulation:
 
     def simulate_true_data(self):
         kwargs = dict(
-            a=self.a_true, b=self.b_true, c=self.c_true, S0=self.S0_true, rain=self.data["r_true"]
+            a=self.a_true,
+            b=self.b_true,
+            c=self.c_true,
+            S0=self.S0_true,
+            rain=self.data["r_true"],
         )
         self.data["q_true"], self.data["S_true"] = self.abc_model(**kwargs)
 
@@ -88,7 +91,7 @@ class ABCSimulation:
             b=self.b_est,
             c=self.c_est,
             S0=self.S0_est,
-            rain=self.data["r_obs"]
+            rain=self.data["r_obs"],
         )
         self.data["q_prior"], self.data["S_prior"] = self.abc_model(**kwargs)
 
@@ -109,8 +112,12 @@ class ABCSimulation:
         self.S0_est = self.S0_true + self.epsilon_S0
 
     def add_noise_to_data(self):
-        self.data["r_obs"] = np.clip(self.data["r_true"] + self.epsilon_r_obs, a_min=0, a_max=None)
-        self.data["q_obs"] = np.clip(self.data["q_true"] + self.epsilon_q_obs, a_min=0, a_max=None)
+        self.data["r_obs"] = np.clip(
+            self.data["r_true"] + self.epsilon_r_obs, a_min=0, a_max=None
+        )
+        self.data["q_obs"] = np.clip(
+            self.data["q_true"] + self.epsilon_q_obs, a_min=0, a_max=None
+        )
 
     def abc_model(self, a: float, b: float, c: float, S0: float, rain: np.ndarray):
         S = S0
@@ -124,5 +131,81 @@ class ABCSimulation:
 
         return q_sim, S_sim
 
-    def print_latex(self):
+    def print_latex(self, double_space: bool = False):
+        """
+        """
+        if double_space:
+            space = "\\\ \\\\"  #  evaluates to -> "\\ \\"
+        else:
+            space = "\\\\"  #   evaluates to -> "\\"
+
+        print("\sigma_{r\_obs}" + f"= {self.std_r_obs}")
+        print(space)
+        print("\sigma_{q\_obs}" + f"= {self.std_q_obs}")
+        print(space)
+        print("\sigma_{abc}" + f"= {self.std_abc}")
+        print(space)
+        print("\sigma_{S0}" + f"= {self.std_S0}")
+
         pass
+
+
+def plot_experiment_simulation(data):
+    fig, axs = plt.subplots(2, 1, figsize=(12, 4 * 2))
+    ax = axs[1]
+    ax.scatter(
+        x=np.arange(len(data["q_obs"])),
+        y=data["q_obs"],
+        marker="x",
+        color="k",
+        lw=0.5,
+        label="Measured $q_{obs}$",
+    )
+    data["q_true"].plot(
+        ax=ax, lw=2, ls="--", color="k", alpha=0.8, label="Unobserved $q_{true}$"
+    )
+    data["q_prior"].plot(
+        ax=ax,
+        lw=2,
+        ls=":",
+        color=sns.color_palette()[1],
+        alpha=0.8,
+        label="Unfiltered Prior $q_{prior}$",
+    )
+    ax.set_ylabel("Specific Discharge (q - $mm day^{-1} km^{-2}$)")
+    ax.set_xlabel("Time")
+    ax.set_title(
+        "Specific Discharge $\sigma_{q_{obs}}$: "
+        f"{std_q_obs}"
+        "\n$\sigma_{abc}$:"
+        f"{std_abc} "
+        "$\sigma_{S0}$:"
+        f"{std_S0}"
+        " All $\epsilon \sim N(0, \sigma)$"
+    )
+    ax.set_ylim(-0.1, 4.5)
+    ax.legend()
+    sns.despine()
+
+    ax = axs[0]
+    ax.bar(
+        x=np.arange(len(data["q_obs"])),
+        height=data["r_true"],
+        width=1,
+        label="Unobserved $r_{true}$",
+    )
+    ax.scatter(
+        x=np.arange(len(data["q_obs"])),
+        y=data["r_obs"],
+        marker="x",
+        color=sns.color_palette()[0],
+        lw=0.5,
+        label="Measured $r_{obs}$",
+    )
+    ax.set_ylabel("Precipitation (r - $mm day^{-1}$)")
+    ax.set_xlabel("Time")
+    ax.set_title("Precipitation: $\sigma_{r_{obs}}$:" f"{std_r_obs}")
+    ax.legend()
+    sns.despine()
+
+    plt.tight_layout()
