@@ -2,6 +2,7 @@
 from filterpy.common import Saver
 import pandas as pd
 import numpy as np
+from sklearn.metrics import r2_score
 
 from abc_model import PARAMETERS as params
 
@@ -37,7 +38,7 @@ def print_latex_matrices(s: Saver):
         )
 
 
-def update_data_columns(data: pd.DataFrame, s: Saver):
+def update_data_columns(data: pd.DataFrame, s: Saver, dimension: int = 1):
     # update data with POSTERIOR estimates
     # Calculate the DISCHARGE (measurement operator * \bar{x})
 
@@ -53,19 +54,29 @@ def update_data_columns(data: pd.DataFrame, s: Saver):
     elif "hx" in s.keys:
         # unscented KF = 1D state, 1D observation
         # TODO: undo the linearisation of hx
-        a, b, c = params["a"], params["b"], params["c"]
-
         # iterate over each timestep (TODO: speed this up?)
         q_x_prior = []
         q_filtered = []
         q_variance = []
         q_variance_plusR = []
-        for t_ix, r in enumerate(data["r_obs"]):
-            # call the h function
-            q_x_prior.append(s.hx[t_ix](s.x_prior[t_ix, 0], r))
-            q_filtered.append(s.hx[t_ix](s.x[t_ix, 0], r))
-            q_variance.append(s.hx[t_ix](s.P[t_ix, 0], r))
-            q_variance_plusR.append(s.hx[t_ix](s.P[t_ix, 0], r) + s.R[t_ix, 0])
+
+        if dimension == 1:
+            for t_ix, r in enumerate(data["r_obs"]):
+                # call the h function
+                q_x_prior.append(s.hx[t_ix](s.x_prior[t_ix, 0], r))
+                q_filtered.append(s.hx[t_ix](s.x[t_ix, 0], r))
+                q_variance.append(s.hx[t_ix](s.P[t_ix, 0], r))
+                q_variance_plusR.append(s.hx[t_ix](s.P[t_ix, 0], r) + s.R[t_ix, 0])
+        elif dimension == 2:
+            for t_ix, z in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
+                q_x_prior.append(s.hx[t_ix](s.x_prior[t_ix])[0])
+                q_filtered.append(s.hx[t_ix](s.x[t_ix])[0])
+                q_variance.append(s.hx[t_ix](s.P[t_ix], P_matrix=True)[0, 0])
+                q_variance_plusR.append(
+                    s.hx[t_ix](s.P[t_ix], P_matrix=True)[0, 0] + s.R[t_ix, 0, 0]
+                )
+        else:
+            assert False, "Only implemented [1, 2] dimensions"
 
         data["q_x_prior"] = np.array(q_x_prior).flatten()
         data["q_filtered"] = np.array(q_filtered).flatten()
@@ -77,3 +88,26 @@ def update_data_columns(data: pd.DataFrame, s: Saver):
     data["s_filtered"] = s.x[:, 0]
 
     return data
+
+
+def calculate_r2_metrics(data):
+    data = data.dropna()
+    # unfiltered prediction
+    prior_r2 = r2_score(data["q_true"], data["q_prior"])
+    # filtered posterior prediction
+    posterior_r2 = r2_score(data["q_true"], data["q_filtered"])
+
+    #  filtered prior prediction
+    if "q_x_prior" in data.columns:
+        filtered_prior_r2 = r2_score(data["q_true"], data["q_x_prior"])
+        r2 = pd.DataFrame(
+            {
+                "run": ["posterior", "prior", "filtered_prior"],
+                "r2": [posterior_r2, prior_r2, filtered_prior_r2],
+            }
+        )
+    else:
+        r2 = pd.DataFrame(
+            {"run": ["posterior", "prior"], "r2": [posterior_r2, prior_r2]}
+        )
+    return r2
