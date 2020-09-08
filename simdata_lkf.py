@@ -170,14 +170,16 @@ def run_kf(
     # Iterate over the Kalman Filter
     for time_ix, z in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
         kf.predict()
+
         # only make update steps every n timesteps
         if time_ix % observe_every == 0:
             kf.update(z)
+
         s.save()
 
     s.to_array()
 
-    data = update_data_columns(data, s, dimension=None)
+    data_lkf = update_data_columns(data.copy(), s, dimension=None)
 
     # # only observe every n values
     # # data["q_true_original"] = data["q_true"]
@@ -196,27 +198,7 @@ def run_kf(
 
     # data["q_prior2"] = ((s.H @ s.x_prior))[:, 0]
 
-    return kf, s, data
-
-
-def calculate_r2_metrics(data):
-    data = data.dropna()
-    # unfiltered prediction
-    prior_r2 = r2_score(data["q_true"], data["q_prior"])
-    #  filtered prior prediction
-    if "q_x_prior" in data.columns:
-        filtered_prior_r2 = r2_score(data["q_true"], data["q_x_prior"])
-
-    # filtered posterior prediction
-    posterior_r2 = r2_score(data["q_true"], data["q_filtered"])
-
-    r2 = pd.DataFrame(
-        {
-            "run": ["posterior", "prior", "filtered_prior"],
-            "r2": [posterior_r2, prior_r2, filtered_prior_r2],
-        }
-    )
-    return r2
+    return kf, s, data_lkf
 
 
 # --------------- MAIN CODE -----------------
@@ -235,7 +217,7 @@ if __name__ == "__main__":
     S0 = initial_state = 5.74  # 5.74
     s_variance = 10  #  P[0, 0]  10
     r_variance = 10  #  P[1, 1]  10
-    Q00_s_noise = 1  #  Q[0, 0] 10  0.1
+    Q00_s_noise = 10  #  Q[0, 0] 10  0.1
     Q11_r_noise = 1e5  #  Q[1, 1] 10_000
 
     # How often to make observations?
@@ -276,7 +258,7 @@ if __name__ == "__main__":
         R=R,
         S0=S0_est,
         observe_every=1,
-        params=dict(a=a_est, b=b_est, c=c_est)
+        params=dict(a=a_est, b=b_est, c=c_est),
     )
 
     print_latex_matrices(s)
