@@ -521,22 +521,51 @@ def plot_1_1_line(ax):
 
     return ax
 
-    def sigma_points_2D_plot(s_ukf: Saver):
-        viridis = sns.color_palette("viridis", 365)
-        mean_S, mean_r = s_ukf.x_prior[:, 0], s_ukf.x_prior[:, 1]
-        sigmas_S, sigmas_r = s_ukf.sigmas_f[:, :, 0], s_ukf.sigmas_f[:, :, 1]
 
-        fig, ax = plt.subplots()
-        for time_ix in range(0, 365):
-            s = ax.scatter(mean_S[time_ix], mean_r[time_ix],
-                           color=viridis[time_ix])
-            for ix, sigma_S in enumerate(sigmas_S[time_ix]):
-                ax.scatter(
-                    sigma_S, sigmas_r[time_ix, ix],
-                    marker="x", color=viridis[time_ix], alpha=0.7
-                )
-        plt.colorbar(s)
-        ax.set_xlabel("Storage (S)")
-        ax.set_ylabel("Rainfall (r)")
-        ax.set_title("Distribution of all Sigma Points (2D Space)")
-        sns.despine()
+def sigma_points_2D_plot(s_ukf: Saver):
+    viridis = sns.color_palette("viridis", 365)
+    mean_S, mean_r = s_ukf.x_prior[:, 0], s_ukf.x_prior[:, 1]
+    sigmas_S, sigmas_r = s_ukf.sigmas_f[:, :, 0], s_ukf.sigmas_f[:, :, 1]
+
+    fig, ax = plt.subplots()
+    for time_ix in range(0, 365):
+        s = ax.scatter(mean_S[time_ix], mean_r[time_ix],
+                        color=viridis[time_ix])
+        for ix, sigma_S in enumerate(sigmas_S[time_ix]):
+            ax.scatter(
+                sigma_S, sigmas_r[time_ix, ix],
+                marker="x", color=viridis[time_ix], alpha=0.7
+            )
+    plt.colorbar(s)
+    ax.set_xlabel("Storage (S)")
+    ax.set_ylabel("Rainfall (r)")
+    ax.set_title("Distribution of all Sigma Points (2D Space)")
+    sns.despine()
+
+
+def plot_sigma_points_SLOW(s_ukf):
+    viridis = sns.color_palette("viridis", 365)
+    mean_S, mean_r = s_ukf.x_prior[:, 0], s_ukf.x_prior[:, 1]
+    sigmas_S, sigmas_r = s_ukf.sigmas_f[:, :, 0], s_ukf.sigmas_f[:, :, 1]
+
+    fig, axs = plt.subplots(2, 1, figsize=(12, 4*2))
+    for time_ix in range(0, 365):
+        axs[0].scatter(time_ix, mean_S[time_ix], color=viridis[time_ix])
+        axs[1].scatter(time_ix, mean_r[time_ix], color=viridis[time_ix])
+
+        for ix in range(sigmas_S.shape[-1]):
+            axs[0].scatter(
+                time_ix, sigmas_S[time_ix, ix],
+                marker="x", color=viridis[time_ix], alpha=0.7
+            )
+            axs[1].scatter(
+                time_ix, sigmas_r[time_ix, ix],
+                marker="x", color=viridis[time_ix], alpha=0.7
+            )
+
+    axs[0].set_title("Storage (S)")
+    axs[1].set_title("Rainfall (r)")
+    axs[0].set_xlabel("Time")
+    axs[1].set_xlabel("Time")
+    plt.tight_layout()
+    sns.despine()
