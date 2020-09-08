@@ -44,7 +44,6 @@ class ABCSimulation:
         # read in the initial data
         self.data = self.load_data()
         self.n_instances = len(self.data)
-        self.data[""]
 
         # generate random 'noise'
         self.epsilon_r_obs: np.ndarray = np.random.normal(

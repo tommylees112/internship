@@ -59,6 +59,7 @@ if __name__ == "__main__":
     # --- DATA --- #
     simulator = ABCSimulation(
         data_dir,
+        log_precip=True,
         std_q_obs=std_q_obs,
         std_r_obs=std_r_obs,
         std_abc=std_abc,
@@ -259,29 +260,14 @@ if __name__ == "__main__":
     fig.savefig("/Users/tommylees/Downloads/00_rainfall_variance_separate.png")
 
     ## --- Plot Sigma Points ---
-    viridis = sns.color_palette("viridis", 365)
-    mean_S, mean_r = s_ukf.x_prior[:, 0], s_ukf.x_prior[:, 1]
-    sigmas_S, sigmas_r = s_ukf.sigmas_f[:, :, 0], s_ukf.sigmas_f[:, :, 1]
 
-    fig, axs = plt.subplots(2, 1, figsize=(12, 4*2))
-    for time_ix in range(0, 365):
-        axs[0].scatter(time_ix, mean_S[time_ix], color=viridis[time_ix])
-        axs[1].scatter(time_ix, mean_r[time_ix], color=viridis[time_ix])
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.scatter(x=np.arange(0, 365), y=data_ukf["q_x_prior"], color=viridis)
+    sigmas_h = s_ukf.sigmas_h[:, :, 0]
+    for i in range(sigmas_h.shape[-1]):
+        ax.scatter(x=np.arange(0, 365), y=sigmas_h[:, i], color=viridis, marker="x")
 
-        for ix in range(sigmas_S.shape[-1]):
-            axs[0].scatter(
-                time_ix, sigmas_S[time_ix, ix],
-                marker="x", color=viridis[time_ix], alpha=0.7
-            )
-            axs[1].scatter(
-                time_ix, sigmas_r[time_ix, ix],
-                marker="x", color=viridis[time_ix], alpha=0.7
-            )
-
-    axs[0].set_title("Storage (S)")
-    axs[1].set_title("Rainfall (r)")
-    axs[0].set_xlabel("Time")
-    axs[1].set_xlabel("Time")
-    plt.tight_layout()
+    ax.set_title("Sigma Points in Measurement Space ($\mathcal{z}_i = hx(\mathcal{y}_i)$)")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Discharge (q)")
     sns.despine()
-
