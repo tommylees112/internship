@@ -71,7 +71,7 @@ class ABCSimulation:
         assert all(np.isin(["precipitation", "discharge_spec"], df.columns))
 
         if self.log_precip:
-            df["precipitation"] == np.log(df["precipitation"] + 1e-10)
+            df["precipitation"] = np.log(df["precipitation"] + 1e-10)
 
         df = df.rename({"precipitation": "r_raw", "discharge_spec": "q_raw"}, axis=1)
         df["r_true"] = df["r_raw"]
