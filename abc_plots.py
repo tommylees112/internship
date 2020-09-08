@@ -520,3 +520,23 @@ def plot_1_1_line(ax):
     )
 
     return ax
+
+    def sigma_points_2D_plot(s_ukf: Saver):
+        viridis = sns.color_palette("viridis", 365)
+        mean_S, mean_r = s_ukf.x_prior[:, 0], s_ukf.x_prior[:, 1]
+        sigmas_S, sigmas_r = s_ukf.sigmas_f[:, :, 0], s_ukf.sigmas_f[:, :, 1]
+
+        fig, ax = plt.subplots()
+        for time_ix in range(0, 365):
+            s = ax.scatter(mean_S[time_ix], mean_r[time_ix],
+                           color=viridis[time_ix])
+            for ix, sigma_S in enumerate(sigmas_S[time_ix]):
+                ax.scatter(
+                    sigma_S, sigmas_r[time_ix, ix],
+                    marker="x", color=viridis[time_ix], alpha=0.7
+                )
+        plt.colorbar(s)
+        ax.set_xlabel("Storage (S)")
+        ax.set_ylabel("Rainfall (r)")
+        ax.set_title("Distribution of all Sigma Points (2D Space)")
+        sns.despine()
