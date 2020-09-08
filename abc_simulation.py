@@ -19,6 +19,7 @@ class ABCSimulation:
     """
 
     data_dir: Path = Path("data")
+    log_precip: bool = True
 
     # known parameters for simulating uncertainty
     std_q_obs: float = 0.1
@@ -43,6 +44,7 @@ class ABCSimulation:
         # read in the initial data
         self.data = self.load_data()
         self.n_instances = len(self.data)
+        self.data[""]
 
         # generate random 'noise'
         self.epsilon_r_obs: np.ndarray = np.random.normal(
@@ -68,6 +70,9 @@ class ABCSimulation:
     def load_data(self):
         df = pd.read_csv(self.data_dir / "39034_2010.csv")
         assert all(np.isin(["precipitation", "discharge_spec"], df.columns))
+
+        if self.log_precip:
+            df["precipitation"] == np.log(df["precipitation"] + 1e-10)
 
         df = df.rename({"precipitation": "r_raw", "discharge_spec": "q_raw"}, axis=1)
         df["r_true"] = df["r_raw"]
