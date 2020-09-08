@@ -82,7 +82,7 @@ def hx(
 
 def init_2D_filter(
     r0: float,
-    S_var: float = 1,
+    s_variance: float = 1,
     r_variance: float = 100,
     Q00_s_noise: float = 0.01,
     Q11_r_noise: float = 10_000,
@@ -98,7 +98,7 @@ def init_2D_filter(
     X (state mean):
         [S, r]^T
     P (state uncertainty):
-        [[S_var, 0    ]
+        [[s_variance, 0    ]
          [0    , r_var]]
 
     ABC Model
@@ -131,7 +131,9 @@ def init_2D_filter(
         a, b, c = params["a"], params["b"], params["c"]
         H = np.array([[c, (1 - a - b)], [0, 1]])
         if P_matrix:
-            z_sigma = (H @ prior_sigma) @ np.transpose(H) # np.dot(np.dot(H, prior_sigma), np.transpose(H))
+            z_sigma = (H @ prior_sigma) @ np.transpose(
+                H
+            )  #  np.dot(np.dot(H, prior_sigma), np.transpose(H))
         else:  #   default
             z_sigma = np.dot(H, prior_sigma)
         return z_sigma
@@ -149,7 +151,7 @@ def init_2D_filter(
 
     # State Covariance (P) initial estimate
     # (2, 2) = square matrix
-    abc_filter.P[:] = np.diag([S_var, r_variance])
+    abc_filter.P[:] = np.diag([s_variance, r_variance])
 
     # Process noise (Q)
     # (2, 2) = square matrix
@@ -169,7 +171,7 @@ def init_2D_filter(
 
 def init_filter(
     S0: float = 5.74,
-    S_var: float = 1,
+    s_variance: float = 1,
     Q00_s_noise: float = 0.01,
     R: float = 1,
     h: Callable = hx,
@@ -185,7 +187,7 @@ def init_filter(
         [S0]^T
 
     P (state uncertainty):
-        [S_var]
+        [s_variance]
 
     ABC Model
     F (process transition matrix):
@@ -193,7 +195,7 @@ def init_filter(
 
     Args:
         S0 (float, optional): [description]. Defaults to 5.74.
-        S_var (float, optional): P_t=0. Defaults to 1.
+        s_variance (float, optional): P_t=0. Defaults to 1.
         Q00_s_noise (float, optional): [description]. Defaults to 0.01.
         R (float, optional): [description]. Defaults to 1.
         h (Callable, optional): [description]. Defaults to hx.
@@ -228,7 +230,7 @@ def init_filter(
 
     # State Covariance (P) initial estimate
     # (2, 2) = square matrix
-    abc_filter.P[:] = np.diag([S_var])
+    abc_filter.P[:] = np.diag([s_variance])
 
     # Process noise (Q)
     # (2, 2) = square matrix
@@ -244,6 +246,85 @@ def init_filter(
     abc_filter.dim_u = 0
 
     return abc_filter
+
+
+def run_ukf(
+    data: pd.DataFrame,
+    S0_est: float,
+    s_variance: float,
+    r_variance: Optional[float],
+    Q00_s_noise: float,
+    Q11_r_noise: Optional[float],
+    R: float,
+    params: Dict[str, float],
+    alpha: float,
+    beta: float,
+    kappa: float,
+    dimension: int = 2,
+    observe_every: int = 1,
+) -> Tuple[UKF.UnscentedKalmanFilter, pd.DataFrame, Saver]:
+    # --- INIT FILTER --- #
+    if dimension == 1:
+        ukf = init_filter(
+            S0=S0_est,
+            s_variance=s_variance,
+            Q00_s_noise=Q00_s_noise,
+            R=R,
+            h=hx,
+            f=abc,
+            params=params,  #  dict(a=a_est, b=b_est, c=c_est)
+            alpha=alpha,
+            beta=beta,
+            kappa=kappa,
+        )
+    elif dimension == 2:
+        ukf = init_2D_filter(
+            S0=S0_est,
+            r0=data["r_obs"][0],
+            s_variance=s_variance,
+            r_variance=r_variance,
+            Q00_s_noise=Q00_s_noise,
+            Q11_r_noise=Q11_r_noise,
+            R=R,
+            params=params,
+            alpha=alpha,
+            beta=beta,
+            kappa=kappa,
+        )
+
+    s = Saver(ukf)
+
+    # --- RUN FILTER --- #
+    for time_ix, (q, r) in enumerate(np.vstack([data["q_obs"], data["r_obs"]]).T):
+        # NOTE: z is the discharge (q)
+        if dimension == 1:
+            # TODO: how include measurement accuracy of rainfall ?
+            fx_args = hx_args = {"r": r}  #  rainfall inputs to the model
+
+            # predict
+            ukf.predict(**fx_args)
+
+            # update
+            if time_ix % observe_every == 0:
+                ukf.update(q, **hx_args)
+
+        elif dimension == 2:
+            z2d = np.array([q, r])
+            ukf.predict()
+
+            if time_ix % observe_every == 0:
+                ukf.update(z2d)
+
+        else:
+            assert False, "Have only implemented [1, 2] dimensions"
+
+        s.save()
+
+    # save the output data
+    s.to_array()
+    data_ukf = update_data_columns(data.copy(), s, dimension=dimension)
+
+    return ukf, data_ukf, s
 
 
 if __name__ == "__main__":
@@ -264,7 +345,9 @@ if __name__ == "__main__":
     std_S0 = 0.01
 
     # --- UKF HYPERPARAMETERS --- #
-    Q00_s_noise = 10  #  10
+    Q00_s_noise = 1  #  Q[0, 0] 10  0.1
+    Q11_r_noise = 1e5  #  Q[1, 1] 10_000
+
     R = 1e-2  #  1e-2
     alpha = 1e-3
     beta = 2
@@ -272,8 +355,9 @@ if __name__ == "__main__":
     s_variance = 10  #  P[0, 0]  10
     r_variance = 10  #  P[1, 1]  10
 
+    observe_every = 2
+
     # 2D parameters
-    Q11_r_noise = 1e5  #  10_000
 
     # --- DATA --- #
     simulator = ABCSimulation(
@@ -289,67 +373,28 @@ if __name__ == "__main__":
     S0_est = simulator.S0_est
     S0_true = simulator.S0_true
 
-    # --- INIT FILTER --- #
-    if DIMENSION == 1:
-        ukf = init_filter(
-            S0=S0_est,
-            S_var=s_variance,
-            Q00_s_noise=Q00_s_noise,
-            R=R,
-            h=hx,
-            f=abc,
-            params=dict(a=a_est, b=b_est, c=c_est),
-            alpha=alpha,
-            beta=beta,
-            kappa=kappa,
-        )
-    elif DIMENSION == 2:
-        ukf = init_2D_filter(
-            S0=S0_est,
-            r0=data["r_obs"][0],
-            S_var=s_variance,
-            r_variance=r_variance,
-            Q00_s_noise=Q00_s_noise,
-            Q11_r_noise=Q11_r_noise,
-            R=R,
-            params=dict(a=a_est, b=b_est, c=c_est),
-            alpha=alpha,
-            beta=beta,
-            kappa=kappa,
-        )
+    params = dict(a=a_est, b=b_est, c=c_est)
 
-    s = Saver(ukf)
-
-    # --- RUN FILTER --- #
-    # TODO: how include measurement accuracy of rainfall ?
-    for z, r in np.vstack([data["q_obs"], data["r_obs"]]).T:
-        if DIMENSION == 1:
-            fx_args = hx_args = {"r": r}  #  rainfall inputs to the model
-
-            # predict
-            ukf.predict(**fx_args)
-
-            # update
-            ukf.update(z, **hx_args)
-        elif DIMENSION == 2:
-            z2d = np.array([z, r])
-            ukf.predict()
-            ukf.update(z2d)
-
-        else:
-            assert False, "Have only implemented [1, 2] dimensions"
-
-        s.save()
-
-    # save the output data
-    s.to_array()
-    data = update_data_columns(data, s, dimension=DIMENSION)
-
-    print_latex_matrices(s)
+    # --- RUN THE UNSCENTED KF --- #
+    ukf, data, s = run_ukf(
+        data=data,
+        S0_est=S0_est,
+        s_variance=s_variance,
+        r_variance=r_variance,
+        Q00_s_noise=Q00_s_noise,
+        Q11_r_noise=Q11_r_noise,
+        R=R,
+        params=params,
+        alpha=alpha,
+        beta=beta,
+        kappa=kappa,
+        dimension=DIMENSION,
+        observe_every=observe_every,
+    )
 
     s_ukf = s
     data_ukf = data
-    params = dict(a=a_est, b=b_est, c=c_est)
+
     H = np.array([[params["c"], (1 - params["a"] - params["b"])], [0, 1]])
 
     # --- PLOTS --- #
@@ -370,7 +415,7 @@ if __name__ == "__main__":
         "$\sigma_{S0}$:"
         f"{std_S0}"
     )
-    ax.set_ylim(-0.1, 4.5)
+    ax.set_ylim(-0.1, None)
     plt.show()
     # fig.savefig(plot_dir / f"001_discharge_preds_{int( random.random() * 100 )}")
 
